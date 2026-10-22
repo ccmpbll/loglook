@@ -6,4 +6,3 @@ function formatLocalTimes() {
 }
 
 document.addEventListener("DOMContentLoaded", formatLocalTimes);
-document.body.addEventListener("htmx:afterSwap", formatLocalTimes);

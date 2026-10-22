@@ -6,14 +6,13 @@ from datetime import timedelta
 from sqlmodel import Session, delete, select
 
 from app.database import engine
-from app.models import AdminAudit, ApiToken, utcnow
+from app.models import ApiToken, utcnow
 from app.services import clock
 
 TOKEN_PREFIX = "loglook_"
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,40}$")
 MAX_EXPIRY_DAYS = 3650
 LAST_USED_REFRESH = timedelta(minutes=1)
-AUDIT_KEEP = 5000
 
 
 def hash_token(token: str) -> str:
@@ -83,14 +82,4 @@ def toggle(token_id: int) -> None:
 def delete_token(token_id: int) -> None:
     with Session(engine) as session:
         session.exec(delete(ApiToken).where(ApiToken.id == token_id))
-        session.commit()
-
-
-def admin_audit(admin: str, action: str, detail: str = "") -> None:
-    with Session(engine) as session:
-        row = AdminAudit(admin=admin, action=action, detail=detail[:300])
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        session.exec(delete(AdminAudit).where(AdminAudit.id <= row.id - AUDIT_KEEP))
         session.commit()

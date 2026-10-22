@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -45,8 +47,8 @@ def logs_page(
     if src is None:
         return templates.TemplateResponse(request, "logs.html", ctx)
     ctx["source"] = src.name
-    hours = min(max(hours, 0.25), query.MAX_HOURS)
-    ago = min(max(ago, 0), query.MAX_AGO)
+    hours = min(max(hours, 0.25), query.MAX_HOURS) if math.isfinite(hours) else 24
+    ago = min(max(ago, 0), query.MAX_AGO) if math.isfinite(ago) else 0
     ctx["hours"], ctx["ago"] = hours, ago
     files = sources.discover().get(src.ip, [])
     try:

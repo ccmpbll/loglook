@@ -49,7 +49,10 @@ def _duration(value, where: str) -> timedelta:
     if not m:
         raise ConfigError(f"{where}: quiet_after must look like 15m, 24h or 2d")
     n = int(m.group(1))
-    return timedelta(minutes=n) if m.group(2) == "m" else timedelta(hours=n) if m.group(2) == "h" else timedelta(days=n)
+    try:
+        return timedelta(minutes=n) if m.group(2) == "m" else timedelta(hours=n) if m.group(2) == "h" else timedelta(days=n)
+    except OverflowError:
+        raise ConfigError(f"{where}: quiet_after is too large") from None
 
 
 def parse(text: str) -> Config:
@@ -106,8 +109,8 @@ def get_config() -> tuple[Config | None, str]:
         _cache["mtime"] = mtime
         try:
             _cache["config"], _cache["error"] = parse(CONFIG_PATH.read_text()), ""
-        except ConfigError as exc:
-            _cache["error"] = str(exc)
+        except Exception as exc:  # noqa: BLE001 - a bad file (bad bytes, unreadable, absurd value) keeps the last good config
+            _cache["error"] = str(exc) or type(exc).__name__
     return _cache["config"], _cache["error"]
 
 
@@ -129,7 +132,7 @@ def status(ip: str, files: list[Path], source: Source | None, tz: ZoneInfo) -> d
     now = clock.now()
     last = logreader.last_line_time(files, now, tz)
     age = (now - last).total_seconds() if last else None
-    recent = sum(1 for _ in logreader.read_window(files, now - timedelta(hours=1), now, now, tz))
+    recent = logreader.count_lines(files, now - timedelta(hours=1), now, tz)
     quiet = None
     if source is not None and source.quiet_after is not None:
         quiet = age is None or age > source.quiet_after.total_seconds()

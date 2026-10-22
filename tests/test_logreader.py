@@ -126,6 +126,53 @@ def test_reads_are_bounded():
         lr.MAX_LINES = old
 
 
+def test_an_empty_live_file_does_not_hide_the_rotated_one():
+    d = logs / "justrotated"
+    d.mkdir()
+    (d / "syslog-10.2.2.2.log").write_text("")  # the 04:39 rotation: the live file is empty until the first new line
+    write_series(d / "syslog-10.2.2.2.log.1", LOCAL_NOW - timedelta(hours=6), 60, 60)
+    files = lr.log_files(d, "10.2.2.2")
+    assert len(list(lr.read_window(files, LOCAL_NOW - timedelta(hours=24), LOCAL_NOW, NOW, TZ))) == 60
+    assert lr.count_lines(files, LOCAL_NOW - timedelta(hours=24), NOW, TZ) == 60
+
+
+def test_a_line_from_a_fast_clock_does_not_end_the_read():
+    f = logs / "syslog-10.1.1.5.log"
+    rows = [(LOCAL_NOW - timedelta(hours=3), "h", "early"), (LOCAL_NOW + timedelta(hours=5), "h", "clock ahead"), (LOCAL_NOW - timedelta(hours=1), "h", "after the glitch")]
+    with open(f, "w") as fh:
+        for t, host, text in rows:
+            fh.write(f"{fx.stamp(t)} {host} {text}\n")
+    got = [l.text for l in lr.read_window([f], LOCAL_NOW - timedelta(hours=6), LOCAL_NOW, NOW, TZ)]
+    assert got == ["early", "after the glitch"], got
+    # but a window that ended long ago does not read the rest of a big file
+    old = lr.MAX_LATE
+    lr.MAX_LATE = 5
+    try:
+        write_series(f, LOCAL_NOW - timedelta(hours=10), 400, 60, "h")
+        stats = lr.ReadStats()
+        list(lr.read_window([f], LOCAL_NOW - timedelta(hours=10), LOCAL_NOW - timedelta(hours=8), NOW, TZ, stats))
+        assert stats.scanned < 150, stats.scanned
+    finally:
+        lr.MAX_LATE = old
+
+
+def test_a_file_that_never_rotates_can_hold_more_than_a_year():
+    f = logs / "syslog-10.3.3.3.log"
+    start = datetime(2025, 10, 1, 0, 0, tzinfo=TZ)  # Oct 2025 to now (Oct 22 2026): the same dates appear twice
+    fx.write(f, [(start + timedelta(hours=6 * i), "sw", f"Port {i % 24} link up") for i in range(int(386 * 4))])
+    try:
+        for chunk in (400, 256 * 1024):  # tiny chunks cross the year boundary; a big one holds it inside one chunk
+            lr.CHUNK = chunk
+            got = list(lr.read_window([f], LOCAL_NOW - timedelta(hours=24), LOCAL_NOW, NOW, TZ))
+            assert got and all(g.ts.year == 2026 and g.ts > LOCAL_NOW - timedelta(hours=24) for g in got), f"chunk {chunk}: last year's Oct 22 is not today"
+            assert len(got) == 2, (chunk, len(got))
+            across = list(lr.read_window([f], datetime(2025, 12, 30, tzinfo=TZ), datetime(2026, 1, 3, tzinfo=TZ), NOW, TZ))
+            assert [g.ts.year for g in across] == [2025] * 8 + [2026] * 9, (chunk, [g.ts for g in across])
+            assert across == sorted(across, key=lambda l: l.ts), "the year turns over inside the file"
+    finally:
+        lr.CHUNK = 256 * 1024
+
+
 def main():
     test_parse()
     test_windows_across_rotation()
@@ -133,6 +180,9 @@ def main():
     test_empty_missing_and_junk()
     test_a_line_out_of_order_does_not_leak_into_the_window()
     test_reads_are_bounded()
+    test_an_empty_live_file_does_not_hide_the_rotated_one()
+    test_a_line_from_a_fast_clock_does_not_end_the_read()
+    test_a_file_that_never_rotates_can_hold_more_than_a_year()
     print("OK: syslog lines parse, and windows are found by timestamp across rotated files.")
 
 

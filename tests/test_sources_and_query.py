@@ -191,6 +191,44 @@ def test_count():
     assert up["counted"] == 360 and up["distinct"] == 360, "a value can be any captured text"
 
 
+def test_a_config_that_cannot_be_read_keeps_the_last_good_one():
+    good, err = sources.get_config()
+    assert good and not err
+    for body, words in ((b"tz: UTC\n\xff\xfe", "codec"), ("sources:\n  1.2.3.4: {name: a, quiet_after: 99999999999d}\n".encode(), "quiet_after is too large")):
+        time.sleep(0.01)
+        cfg.write_bytes(body)
+        for _ in range(2):  # asked twice: the error must not vanish after the first look
+            c, err = sources.get_config()
+            assert c is good and words in err, (c, err)
+    time.sleep(0.01)
+    cfg.write_text(fx.SOURCES_YML)
+    c, err = sources.get_config()
+    assert not err and c is not good
+
+
+def test_a_slow_pattern_is_cut_off_by_the_query_budget_not_after_thousands_of_lines():
+    config, src, files = files_of("ruckus-ap")
+    old = query.BUDGET_SECONDS
+    query.BUDGET_SECONDS = -1  # already over budget
+    try:
+        r = query.top(config, "ruckus-ap", files, 24, 0, query.Filter(), 10)
+        assert r["truncated"] and r["scanned"] <= 1, r["scanned"]
+    finally:
+        query.BUDGET_SECONDS = old
+
+
+def test_nothing_returned_carries_control_characters():
+    (logs / "syslog-10.9.9.6.log").write_text(f"{fx.stamp(fx.LOCAL_NOW - timedelta(minutes=1))} h\x1b[31m esc\x1b[0m\x07 value=a\x1bb\n")
+    c = sources.parse("sources:\n  10.9.9.6: {name: ctl}\n")
+    files = sources.discover()["10.9.9.6"]
+    lines = query.lines(c, "ctl", files, 1, 0, query.Filter(), 5)["lines"]
+    top = query.top(c, "ctl", files, 1, 0, query.Filter(), 5)["top"]
+    count = query.count(c, "ctl", files, 1, 0, query.Filter(), r"value=(\S+)", 5)["top"]
+    seen = repr((lines, top, count))
+    assert "\\x1b" not in seen and "\\x07" not in seen, seen
+    assert count[0]["value"] == "ab"
+
+
 def main():
     test_config_parse()
     test_config_reload_keeps_last_good()
@@ -199,6 +237,9 @@ def main():
     test_control_characters_and_markup_in_log_text_are_returned_clean()
     test_top()
     test_count()
+    test_a_config_that_cannot_be_read_keeps_the_last_good_one()
+    test_a_slow_pattern_is_cut_off_by_the_query_budget_not_after_thousands_of_lines()
+    test_nothing_returned_carries_control_characters()
     print("OK: sources.yml is validated, and lines, top and count read the right window with the right limits.")
 
 

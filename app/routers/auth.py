@@ -1,16 +1,32 @@
+from collections import deque
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
-from app.auth import any_user_exists, create_user, current_user, get_user_by_username, hash_password, verify_password
+from app.auth import any_user_exists, create_user, current_user, get_user_by_username, hash_password, sign_in, verify_password
 from app.database import engine
 from app.deps import require_login
 from app.models import User
+from app.services import clock
 from app.templating import templates
 
 router = APIRouter()
 
 MIN_PASSWORD = 8
+MAX_FAILURES = 10  # wrong passwords in LOCK_WINDOW, from anyone, before logins pause
+LOCK_WINDOW = timedelta(minutes=10)
+_failures: deque = deque()  # when each recent wrong password happened; one admin, so one counter
+# A hash to check against when the username does not exist, so a wrong name takes as long as a wrong password.
+_DUMMY_HASH = hash_password("loglook-dummy-password")
+
+
+def _locked() -> bool:
+    cutoff = clock.now() - LOCK_WINDOW
+    while _failures and _failures[0] < cutoff:
+        _failures.popleft()
+    return len(_failures) >= MAX_FAILURES
 
 
 def _safe_next(value: str) -> str:
@@ -39,7 +55,7 @@ def setup_submit(request: Request, username: str = Form(...), password: str = Fo
     if error:
         return templates.TemplateResponse(request, "setup.html", {"error": error}, status_code=400)
     user = create_user(username.strip(), password)
-    request.session["user_id"] = user.id
+    sign_in(request, user)
     return RedirectResponse("/", status_code=303)
 
 
@@ -54,10 +70,13 @@ def login_form(request: Request, next: str = ""):
 
 @router.post("/login", response_class=HTMLResponse)
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...), next: str = Form("")):
+    if _locked():
+        return templates.TemplateResponse(request, "login.html", {"error": "Too many wrong passwords. Try again in a few minutes.", "next": _safe_next(next)}, status_code=429)
     user = get_user_by_username(username.strip())
-    if user is None or not verify_password(password, user.password_hash):
+    if not verify_password(password, user.password_hash if user else _DUMMY_HASH) or user is None:
+        _failures.append(clock.now())
         return templates.TemplateResponse(request, "login.html", {"error": "Invalid username or password.", "next": _safe_next(next)}, status_code=400)
-    request.session["user_id"] = user.id
+    sign_in(request, user)
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -86,5 +105,7 @@ def change_password(request: Request, current_password: str = Form(...), new_pas
             row.password_hash = hash_password(new_password)
             session.add(row)
             session.commit()
+            session.refresh(row)
+        sign_in(request, row)  # this session stays signed in; every other one is now invalid
         request.session["flash_ok"] = "Password updated."
     return RedirectResponse("/account", status_code=303)

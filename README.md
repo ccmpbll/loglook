@@ -86,6 +86,7 @@ is untrusted: control characters are stripped, and the pages escape everything t
   signed-in browser is not accepted on `/v1`.
 - Only the SHA-256 of a token is stored. Tokens can be disabled, given an expiry, or deleted at any time.
 - API docs and the schema are not served.
+- After 10 wrong passwords within 10 minutes, logins pause for a few minutes. Changing the password signs out every other browser. Logging out only clears that browser's cookie, so keep `LOGLOOK_SECRET_KEY` private (or change it to end every session).
 
 ## Environment variables
 

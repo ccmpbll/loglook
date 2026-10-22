@@ -19,9 +19,13 @@ def normalize(text: str) -> str:
     return _NUM.sub("#", t)[:200]
 
 
+def strip_control(text: str) -> str:
+    return _CONTROL.sub("", text)
+
+
 def clean(text: str, limit: int = EXAMPLE_CHARS) -> str:
     """Log text is untrusted: no control characters, and bounded."""
-    return _CONTROL.sub("", text)[:limit]
+    return strip_control(text)[:limit]
 
 
 def iso(ts: datetime | None) -> str | None:

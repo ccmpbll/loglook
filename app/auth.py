@@ -1,3 +1,4 @@
+import hashlib
 from typing import Optional
 
 import bcrypt
@@ -14,6 +15,17 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), password_hash.encode())
+
+
+def _fingerprint(user: User) -> str:
+    return hashlib.sha256(user.password_hash.encode()).hexdigest()[:16]
+
+
+def sign_in(request: Request, user: User) -> None:
+    """Start a session. It carries a fingerprint of the password hash, so changing the password
+    ends every other session (a signed cookie cannot be revoked any other way)."""
+    request.session["user_id"] = user.id
+    request.session["pw"] = _fingerprint(user)
 
 
 def any_user_exists() -> bool:
@@ -40,4 +52,5 @@ def current_user(request: Request) -> Optional[User]:
     if user_id is None:
         return None
     with Session(engine) as session:
-        return session.get(User, user_id)
+        user = session.get(User, user_id)
+    return user if user and request.session.get("pw") == _fingerprint(user) else None

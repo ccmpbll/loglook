@@ -12,6 +12,7 @@ Run directly: python3 tests/test_api_and_ui.py
 """
 import shutil
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -132,7 +133,6 @@ def test_api():
         assert getattr(client, method)("/v1/lines?source=switch", headers=H(plain)).status_code == 405, "nothing in /v1 changes anything"
 
     # a bad edit to sources.yml: the API keeps working from the last good one
-    import time
     time.sleep(0.01)
     cfg.write_text("sources: [broken\n")
     h = client.get("/v1/health", headers=H(plain)).json()
@@ -223,9 +223,72 @@ def test_tokens_page():
 
 def test_sources_page():
     page = admin.get("/sources").text
-    assert "10.42.11.99" in page and "unmapped" in page and "silent-box" in page and "Quiet for longer than expected" in page
-    assert "writing logs with no entry in sources.yml: 10.42.11.99" in page
+    assert "10.42.11.99" in page and "no name" in page and "silent-box" in page and "Quiet for longer than expected" in page
+    assert "1 device sending logs has no name yet" in page and 'value="10.42.11.99"' in page and "Name it" in page
     assert 'href="/logs?source=ruckus-ap"' in page
+
+
+def test_naming_devices_in_the_ui_from_a_clean_start():
+    from pathlib import Path
+
+    from app.services import sources
+
+    import logging
+    import re
+
+    logged = []
+    handler = logging.Handler()
+    handler.emit = lambda record: logged.append(record.getMessage())
+    logging.getLogger("loglook").addHandler(handler)
+    plain_token = tokens.create("uisources")[1]
+    original = cfg.read_text()
+    cfg.unlink()
+    try:
+        h = client.get("/v1/health", headers=H(plain_token)).json()
+        assert h["status"] == "degraded" and h["sources"] == 0, "nothing named yet is not 'ok'"
+        page = admin.get("/sources").text
+        assert "sources.yml has a problem" not in page and "no name yet" in page and "10.42.11.5" in page, "first run: no file, and no error"
+        assert "No sources named yet" in admin.get("/logs").text
+        r = admin.post("/sources/add", data={"ip": "10.42.11.5", "name": "ap", "quiet_after": "15m"})
+        assert r.status_code == 200 and "Added ap (10.42.11.5)" in r.text, "the file is created by the first save"
+        assert cfg.exists() and "ap" in cfg.read_text()
+        assert admin.get("/logs?source=ap").status_code == 200 and client.get("/v1/sources", headers=H(plain_token)).json()["sources"][0]["name"] == "ap"
+        r = admin.post("/sources/10.42.11.5/update", data={"name": "wifi-ap", "quiet_after": ""})
+        assert "Saved wifi-ap" in r.text and 'value="wifi-ap"' in r.text
+        for form, url, words in (
+            ({"ip": "10.42.11.9", "name": "wifi-ap"}, "/sources/add", "used twice"),
+            ({"ip": "nope", "name": "x"}, "/sources/add", "not an IPv4"),
+            ({"name": "bad name"}, "/sources/10.42.11.5/update", "name must be"),
+            ({"tz": "Mars/Base"}, "/sources/timezone", "unknown timezone"),
+        ):
+            r = admin.post(url, data=form)
+            assert words in r.text and "class=\"error\"" in r.text, (url, words)
+        assert "Timezone is now UTC." in admin.post("/sources/timezone", data={"tz": "UTC"}).text
+        assert "admin chris: Added ap (10.42.11.5)." in logged, logged
+        r = admin.post("/sources/timezone", data={"tz": "x" * 6000})
+        flash = re.search(r'<p class="error">(.*?)</p>', r.text, re.S).group(1)
+        assert "unknown timezone" in flash and len(flash) <= 320, "an error is cut short: the session is a cookie"
+        assert "not a named source" in admin.post("/sources/10.42.11.200/remove").text, "removing what is not there says so"
+        admin.post("/sources/add", data={"ip": "10.42.11.9", "name": "other"})
+        assert "Removed 10.42.11.9." in admin.post("/sources/10.42.11.9/remove").text
+        assert "10.42.11.9" not in cfg.read_text() and "wifi-ap" in cfg.read_text()
+        # the pages are for the signed-in admin only
+        for url in ("/sources/add", "/sources/timezone", "/sources/10.42.11.5/remove"):
+            assert TestClient(app, follow_redirects=False).post(url, data={"ip": "1.1.1.1", "name": "x", "tz": "UTC"}).headers["location"].startswith("/login"), url
+            assert client.post(url, headers=H(plain_token), data={"ip": "1.1.1.1", "name": "x"}, follow_redirects=False).status_code == 303
+        assert "1.1.1.1" not in cfg.read_text()
+        # a folder that cannot be written says so
+        saved = sources.CONFIG_PATH
+        sources.CONFIG_PATH = Path("/nonexistent-folder/sources.yml")
+        try:
+            r = admin.post("/sources/add", data={"ip": "10.42.11.8", "name": "x"})
+            assert "Could not write" in r.text and "writable" in r.text
+        finally:
+            sources.CONFIG_PATH = saved
+    finally:
+        logging.getLogger("loglook").removeHandler(handler)
+        time.sleep(0.01)
+        cfg.write_text(original)
 
 
 def test_viewer():
@@ -249,7 +312,6 @@ def test_viewer():
 
     # whatever the logs contain is escaped, never rendered
     (logs / "syslog-10.9.9.7.log").write_text(f"{fx.stamp(fx.LOCAL_NOW - timedelta(minutes=2))} h <img src=x onerror=alert(1)> and <script>alert(2)</script> ok\n")
-    import time
     time.sleep(0.01)
     cfg.write_text(fx.SOURCES_YML + "  10.9.9.7:    {name: nasty}\n")
     (logs / "syslog-10.9.9.7.log").write_text(f"{fx.stamp(fx.LOCAL_NOW - timedelta(minutes=2))} h <img src=x onerror=alert(1)> ok <script>alert(2)</script>\n")
@@ -307,6 +369,7 @@ def main():
     test_setup_login_password()
     test_tokens_page()
     test_sources_page()
+    test_naming_devices_in_the_ui_from_a_clean_start()
     test_viewer()
     test_login_pauses_after_too_many_wrong_passwords()
     test_changing_the_password_ends_other_sessions()

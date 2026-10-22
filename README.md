@@ -19,7 +19,7 @@ or counts per captured value. What counts as noise or a problem is up to whateve
 - Filters: contains text, matches a regex, excludes a regex. Windows can end earlier (`ago`), so you can
   compare today with each previous day.
 - A **web UI**: a log viewer (the three views, matches highlighted), a Sources page (is logging alive:
-  last line seen, quiet and unmapped sources), API tokens, your account.
+  last line seen, quiet and unnamed sources, where you name devices), API tokens, your account.
 - A read-only **JSON API** behind bearer tokens. Nothing in it changes anything.
 
 ## Running
@@ -31,33 +31,32 @@ docker run -d --name loglook -p 8000:8000 \
   ccmpbll/loglook:latest
 ```
 
-or use `docker-compose.yml`. Put a `sources.yml` in `./config` (start from `sources.example.yml`),
-open <http://localhost:8000> and create the admin account (first run only). Serve it over HTTPS (a
-reverse proxy) and set `LOGLOOK_SECURE_COOKIES=true`.
+or use `docker-compose.yml`. Open <http://localhost:8000>, create the admin account (first run only),
+then go to **Sources**: every device that has written a log file is listed with a **Name it** button.
+Serve it over HTTPS (a reverse proxy) and set `LOGLOOK_SECURE_COOKIES=true`.
 
-### sources.yml
+### Sources
 
-```
-tz: America/New_York
-sources:
-  10.0.0.1: {name: firewall, quiet_after: 24h}
-  10.0.0.2: {name: switch}
-```
+Each source IP gets a name (used in the API and the pages) and, optionally, a time after which silence
+is flagged (`15m`, `24h`, `2d`). Add, rename, change or remove them on the Sources page, which also
+holds the timezone: syslog lines carry no zone, so they are read as local time in the one you choose
+(default `America/New_York`), and the year is inferred. A device that has not sent anything yet can be
+added by its IP.
 
-One entry per source IP: a `name` (used in the API and the pages) and an optional `quiet_after`
-(`15m`, `24h`, `2d`) after which silence is flagged. A file in the log folder with no entry shows as
-**unmapped**. The file is re-read when it changes; if an edit stops parsing, the last good one stays in
-use and the error shows on the Sources page.
+The page keeps this in `./config/sources.yml` (mount the Config folder, writable, not just the file).
+You never need to open it, but it is plain YAML (`tz:` and a `sources:` map of IP to `name` and optional
+`quiet_after`) and a hand edit is picked up.
 
-Syslog lines carry no year and no timezone: the year is inferred and the time is read as local time in
-`tz`.
+Saving from the page rewrites the file, so comments you add by hand are lost. If an edit stops parsing,
+the last good one stays in use, the Sources page shows the error, and changes are paused until the file
+is fixed or deleted.
 
 ## API
 
 Create a token on the Tokens page; it is shown once and only a hash is stored. Send it as
 `Authorization: Bearer <token>`. Every token is read-only.
 
-Every query takes `source` (a name from `sources.yml`), `hours` (window length, default 24, up to 336)
+Every query takes `source` (a name from the Sources page), `hours` (window length, default 24, up to 336)
 and `ago` (how many hours before now the window ends, default 0), so day *k* back is
 `hours=24&ago=24*k`. Filters: `q` (contains, any case), `include` and `exclude` (regular expressions).
 
@@ -94,7 +93,7 @@ is untrusted: control characters are stripped, and the pages escape everything t
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOGLOOK_LOG_DIR` | `/logs` | the syslog folder (read-only is fine) |
-| `LOGLOOK_CONFIG` | `/config/sources.yml` | which IP is which device |
+| `LOGLOOK_CONFIG` | `/config/sources.yml` | where the Sources page keeps device names and the timezone |
 | `LOGLOOK_DATA_DIR` | `/data` | the admin login and tokens (`loglook.db`), the session key |
 | `LOGLOOK_SECRET_KEY` | generated | signs the session cookie |
 | `LOGLOOK_SECURE_COOKIES` | off | mark the cookie Secure (use behind HTTPS) |

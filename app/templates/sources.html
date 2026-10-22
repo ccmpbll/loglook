@@ -2,29 +2,72 @@
 {% block title %}Sources - loglook{% endblock %}
 {% block content %}
 <div class="page-header"><h1>Sources</h1></div>
-{% if error %}<p class="error">sources.yml: {{ error }}</p>{% endif %}
+{% if error %}<p class="error">sources.yml has a problem: {{ error }}. Changes are paused until it is fixed or deleted.</p>{% endif %}
+{% if flash_error %}<p class="error">{{ flash_error }}</p>{% endif %}
+{% if flash_ok %}<p class="ok">{{ flash_ok }}</p>{% endif %}
 {% set unmapped = statuses | rejectattr('mapped') | list %}
 {% set quiet = statuses | selectattr('quiet') | list %}
-{% if unmapped %}<p class="error">{{ unmapped | length }} source{{ 's' if unmapped | length != 1 }} writing logs with no entry in sources.yml: {{ unmapped | map(attribute='ip') | join(', ') }}</p>{% endif %}
+{% if unmapped %}<p class="error">{{ unmapped | length }} device{{ 's' if unmapped | length != 1 }} sending logs {{ 'has' if unmapped | length == 1 else 'have' }} no name yet: give each one below.</p>{% endif %}
 {% if quiet %}<p class="error">Quiet for longer than expected: {{ quiet | map(attribute='name') | join(', ') }}</p>{% endif %}
 <div class="card">
   <table class="stack">
-    <thead><tr><th>Source</th><th>IP</th><th>Last line</th><th>Lines, last hour</th><th>Files</th><th>Size</th><th></th></tr></thead>
+    <thead><tr><th>Source</th><th>IP</th><th>Last line</th><th>Lines, last hour</th><th>Size</th><th></th></tr></thead>
     <tbody>
       {% for s in statuses %}
       <tr>
-        <td data-label="Source">{{ s.name or 'unmapped' }}{% if s.quiet %} <span class="badge failed">quiet</span>{% elif not s.mapped %} <span class="badge running">unmapped</span>{% endif %}</td>
+        <td data-label="Source">{{ s.name or 'unnamed' }}{% if s.quiet %} <span class="badge failed">quiet</span>{% elif not s.mapped %} <span class="badge running">no name</span>{% endif %}</td>
         <td data-label="IP">{{ s.ip }}</td>
         <td data-label="Last line">{{ s.last_seen[:19].replace('T', ' ') if s.last_seen else 'never' }}</td>
         <td data-label="Lines, last hour">{{ s.lines_last_hour }}</td>
-        <td data-label="Files">{{ s.files | length }}</td>
         <td data-label="Size">{{ '%.1f' | format(s.bytes / 1048576) }} MB</td>
-        <td class="actions-cell" data-label="">{% if s.name %}<a class="btn secondary" href="/logs?source={{ s.name }}">View</a>{% endif %}</td>
+        <td class="actions-cell" data-label="">
+          {% if s.mapped %}
+          <div class="actions"><a class="btn secondary" href="/logs?source={{ s.name }}">View</a>
+            <details class="edit"><summary class="btn secondary">Edit</summary>
+              <form method="post" action="/sources/{{ s.ip }}/update">
+                <label>Name<input type="text" name="name" value="{{ s.name }}" required maxlength="40" /></label>
+                <label>Flag if quiet for<input type="text" name="quiet_after" value="{{ s.quiet_after or '' }}" placeholder="15m, 24h or 2d" maxlength="8" /></label>
+                <div class="actions"><button type="submit">Save</button></div>
+              </form>
+              <form method="post" action="/sources/{{ s.ip }}/remove" onsubmit="return confirm('Remove {{ s.name }}? Its logs stay; it just shows as having no name.');"><button type="submit" class="danger">Remove</button></form>
+            </details>
+          </div>
+          {% else %}
+          <form method="post" action="/sources/add" class="actions">
+            <input type="hidden" name="ip" value="{{ s.ip }}" />
+            <input type="text" name="name" placeholder="Name" required maxlength="40" aria-label="Name for {{ s.ip }}" />
+            <button type="submit">Name it</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="muted">No sources yet.</td></tr>
+      <tr><td colspan="6" class="muted">No logs found in the log folder yet. Add a device by IP below, or point a device's syslog at your server.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+<div class="card">
+  <div class="section-head"><h3>Add a device by IP</h3></div>
+  <p class="muted">For a device that has not sent anything yet. Devices already sending appear above with a Name it button.</p>
+  <form method="post" action="/sources/add">
+    <div class="form-grid">
+      <label>IP address<input type="text" name="ip" required maxlength="15" placeholder="10.0.0.5" /></label>
+      <label>Name<input type="text" name="name" required maxlength="40" placeholder="wifi-ap" /></label>
+      <label>Flag if quiet for (optional)<input type="text" name="quiet_after" maxlength="8" placeholder="15m, 24h or 2d" /></label>
+    </div>
+    <div class="actions form-actions"><button type="submit" class="secondary">Add device</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-head"><h3>Timezone</h3></div>
+  <p class="muted">Syslog lines carry no timezone, so loglook reads them as local time in this one. Use the zone your devices' clocks are set to.</p>
+  <form method="post" action="/sources/timezone">
+    <label>Timezone<input type="text" name="tz" value="{{ tz }}" list="zones" required maxlength="40" /></label>
+    <datalist id="zones">{% for z in zones %}<option value="{{ z }}"></option>{% endfor %}</datalist>
+    <div class="actions form-actions"><button type="submit" class="secondary">Save timezone</button></div>
+  </form>
 </div>
 {% endblock %}

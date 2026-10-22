@@ -182,3 +182,5 @@ td.actions-cell .actions { flex-wrap: nowrap; justify-content: flex-end; }
 mark { background: rgba(224, 179, 65, 0.35); color: inherit; border-radius: 2px; padding: 0 1px; }
 details.more { margin: 4px 0 8px; }
 details.more summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
+details.edit[open] { flex-basis: 100%; margin-top: 8px; }
+details.edit form { margin-bottom: 8px; }

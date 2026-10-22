@@ -291,6 +291,13 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
         cfg.write_text(original)
 
 
+def test_the_page_has_an_icon():
+    for html in (TestClient(app).get("/login").text, admin.get("/logs").text):
+        assert '<link rel="icon" href="/static/logo.png?v=' in html
+    r = TestClient(app).get("/static/logo.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG", "the icon is served without a login"
+
+
 def test_viewer():
     r = admin.get("/logs?source=ruckus-ap&q=status=fail")
     assert r.status_code == 200 and "<mark>status=fail</mark>" in r.text and "1 matched" in r.text
@@ -370,6 +377,7 @@ def main():
     test_tokens_page()
     test_sources_page()
     test_naming_devices_in_the_ui_from_a_clean_start()
+    test_the_page_has_an_icon()
     test_viewer()
     test_login_pauses_after_too_many_wrong_passwords()
     test_changing_the_password_ends_other_sessions()

@@ -149,9 +149,9 @@ def _plan(files: list[Path], start: datetime, now: datetime, tz: ZoneInfo) -> li
     return plan
 
 
-def _stream(f, anchor: datetime | None, now: datetime, tz: ZoneInfo) -> Iterator[tuple[Line | None, bool]]:
-    """Every line from here on as (line, False), or (None, True) for one that is not readable. When
-    the offset's time is known the year is carried forward and bumped when the months wrap round."""
+def _stream(f, anchor: datetime | None, now: datetime, tz: ZoneInfo) -> Iterator[Line | None]:
+    """Every line from here on, or None for one that is not readable. When the offset's time is
+    known the year is carried forward and bumped when the months wrap round."""
     year = anchor.year if anchor else None
     prev = anchor
     for raw in f:
@@ -166,12 +166,9 @@ def _stream(f, anchor: datetime | None, now: datetime, tz: ZoneInfo) -> Iterator
                     line = None
                 else:
                     year = line.ts.year
-        if line is None:
-            yield None, True
-            continue
-        if prev is None or line.ts >= prev - WRAP:
+        if line is not None and (prev is None or line.ts >= prev - WRAP):
             prev = line.ts
-        yield line, False
+        yield line
 
 
 def read_window(files: list[Path], start: datetime, end: datetime, now: datetime, tz: ZoneInfo, stats: ReadStats | None = None) -> Iterator[Line]:
@@ -186,12 +183,12 @@ def read_window(files: list[Path], start: datetime, end: datetime, now: datetime
             continue
         with f:
             f.seek(offset)
-            for line, bad in _stream(f, anchor, now, tz):
+            for line in _stream(f, anchor, now, tz):
                 if stats.scanned >= MAX_LINES:
                     stats.truncated = True
                     return
                 stats.scanned += 1
-                if bad:
+                if line is None:
                     stats.unparsed += 1
                     continue
                 if line.ts < start:

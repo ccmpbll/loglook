@@ -7,7 +7,7 @@
 <p class="empty">No sources named yet. <a href="/sources">Name your devices</a> first.</p>
 {% else %}
 <form method="get" action="/logs" class="card">
-  <div class="form-grid">
+  <div class="form-row" style="--n: 4">
     <label>Source
       <select name="source">{% for n in names %}<option value="{{ n }}" {{ 'selected' if n == source }}>{{ n }}</option>{% endfor %}</select>
     </label>
@@ -25,12 +25,14 @@
       </select>
     </label>
     <label>Ending (hours ago)<input type="number" name="ago" min="0" step="any" value="{{ ago }}" /></label>
-    <label class="wide">Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
+  </div>
+  <div class="form-row" style="--n: {{ 2 if view == 'top' else 3 }}">
     <label>Matches (regex)<input type="text" name="include" value="{{ include }}" maxlength="300" /></label>
     <label>Excludes (regex)<input type="text" name="exclude" value="{{ exclude }}" maxlength="300" /></label>
     {% if view == 'lines' %}<label>Lines (up to 500)<input type="number" name="limit" min="1" max="500" value="{{ limit }}" /></label>{% endif %}
-    {% if view == 'count' %}<label class="wide">Count per (regex with one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>{% endif %}
+    {% if view == 'count' %}<label>Count per (regex, one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>{% endif %}
   </div>
+  <label>Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
   <div class="actions form-actions"><button type="submit">Search</button><a class="btn secondary" href="/logs?source={{ source }}">Reset</a></div>
 </form>
 

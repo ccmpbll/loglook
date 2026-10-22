@@ -180,7 +180,8 @@ td.actions-cell .actions { flex-wrap: nowrap; justify-content: flex-end; }
 .logline .t { color: var(--muted); }
 .logline .h { color: var(--accent); }
 mark { background: rgba(224, 179, 65, 0.35); color: inherit; border-radius: 2px; padding: 0 1px; }
-@media (min-width: 641px) { .form-grid .wide { grid-column: span 2; } }
+.form-row { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 0 16px; }  /* --n boxes spread across the row */
+@media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
 td input { margin-top: 0; }
 td input.narrow { max-width: 6.5rem; }
 @media (min-width: 641px) { td input[name="name"] { min-width: 11rem; } }

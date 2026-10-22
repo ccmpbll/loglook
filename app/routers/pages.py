@@ -11,7 +11,7 @@ from app.templating import templates
 router = APIRouter(dependencies=[Depends(require_login)])
 
 VIEWS = ("lines", "top", "count")
-HOURS = (1, 6, 24, 72, 168, 336)
+WINDOWS = ((1 / 12, "5 minutes"), (0.25, "15 minutes"), (0.5, "30 minutes"), (1, "1 hour"), (2, "2 hours"), (6, "6 hours"), (12, "12 hours"), (24, "24 hours"), (72, "3 days"), (168, "7 days"), (336, "14 days"))
 ZONES = sorted(available_timezones())  # for the timezone box on the Sources page
 
 
@@ -42,7 +42,7 @@ def logs_page(
 ):
     """The log viewer: the same queries the API offers, as a page. It is a GET form, so a search is a link."""
     config, config_error = sources.get_config()
-    ctx = {"config_error": config_error, "view": view if view in VIEWS else "lines", "hours": hours, "ago": ago, "q": q, "include": include, "exclude": exclude, "pattern": pattern, "limit": limit, "hours_options": HOURS, "names": [], "source": source, "result": None, "error": None}
+    ctx = {"config_error": config_error, "view": view if view in VIEWS else "lines", "hours": hours, "ago": ago, "q": q, "include": include, "exclude": exclude, "pattern": pattern, "limit": limit, "windows": WINDOWS, "names": [], "source": source, "result": None, "error": None}
     if config is None:
         return templates.TemplateResponse(request, "logs.html", ctx)
     ctx["names"] = [s.name for s in config.sources.values()]
@@ -50,7 +50,7 @@ def logs_page(
     if src is None:
         return templates.TemplateResponse(request, "logs.html", ctx)
     ctx["source"] = src.name
-    hours = min(max(hours, 0.25), query.MAX_HOURS) if math.isfinite(hours) else 24
+    hours = min(max(hours, query.MIN_HOURS), query.MAX_HOURS) if math.isfinite(hours) else 24
     ago = min(max(ago, 0), query.MAX_AGO) if math.isfinite(ago) else 0
     ctx["hours"], ctx["ago"] = hours, ago
     files = sources.discover().get(src.ip, [])

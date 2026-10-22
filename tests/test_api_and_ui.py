@@ -226,6 +226,8 @@ def test_sources_page():
     assert "10.42.11.99" in page and "no name" in page and "silent-box" in page and "Quiet for longer than expected" in page
     assert "1 device sending logs has no name yet" in page and 'value="10.42.11.99"' in page and "Name it" in page
     assert 'href="/logs?source=ruckus-ap"' in page
+    assert "<details" not in page and ">Edit<" not in page, "rows are edited in place"
+    assert 'name="name" form="src-' in page and 'name="quiet_after" form="src-' in page and "Name it" in page and ">Save<" in page
 
 
 def test_naming_devices_in_the_ui_from_a_clean_start():
@@ -289,6 +291,50 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
         logging.getLogger("loglook").removeHandler(handler)
         time.sleep(0.01)
         cfg.write_text(original)
+
+
+def test_viewer_form_shows_every_filter_and_short_windows():
+    page = admin.get("/logs?source=ruckus-ap").text
+    assert "<details" not in page and "More filters" not in page, "nothing is hidden"
+    for name in ("q", "include", "exclude", "ago", "limit", "hours"):
+        assert f'name="{name}"' in page, name
+    assert '<label class="wide">Contains' in page
+    for value, label in (("0.08333333333333333", "5 minutes"), ("0.25", "15 minutes"), ("0.5", "30 minutes"), ("24", "24 hours"), ("336", "14 days")):
+        assert f'<option value="{value}" >{label}</option>' in page or f'<option value="{value}" selected>{label}</option>' in page, label
+    assert '<option value="24" selected>24 hours</option>' in page, "24 hours by default"
+    quarter = admin.get("/logs?source=ruckus-ap&hours=0.25").text
+    assert '<option value="0.25" selected>15 minutes</option>' in quarter and quarter.count(" selected>") == 3, "the chosen window is the one selected"
+    assert '<option value="3.5" selected>3.5 hours</option>' in admin.get("/logs?source=ruckus-ap&hours=3.5").text, "any other length still works and is shown"
+    assert "0.5 minutes" not in page
+    short = admin.get("/logs?source=ruckus-ap&hours=0.25&view=lines").text
+    assert "lines read" in short
+    h = {"Authorization": "Bearer " + tokens.create("windows")[1]}
+    assert client.get("/v1/lines?source=ruckus-ap&hours=0.1", headers=h).status_code == 200, "a few minutes is allowed"
+    assert client.get("/v1/lines?source=ruckus-ap&hours=0.05", headers=h).status_code == 422, "but not less than five"
+
+
+def test_viewer_tells_a_normal_limit_from_a_real_cut():
+    import re
+
+    from app.services import query
+
+    page = admin.get("/logs?source=ruckus-ap&limit=5").text
+    assert "showing the newest 5 of" in page and "stopped reading early" not in page, "more matches than lines shown is not an error"
+    page = admin.get("/logs?source=ruckus-ap&limit=500&view=lines").text
+    assert re.search(r"showing the newest 500 of \d{3,}", page), "the cap is 500"
+    quiet = admin.get("/logs?source=switch&hours=0.25&view=lines").text
+    assert "showing the newest" not in quiet and "stopped reading early" not in quiet, "nothing cut: nothing said"
+    saved = query.BUDGET_SECONDS
+    query.BUDGET_SECONDS = -1
+    try:
+        for view in ("lines", "top"):
+            page = admin.get(f"/logs?source=ruckus-ap&view={view}").text
+            assert "stopped reading early" in page and "showing the newest" not in page, view
+        assert client.get("/v1/top?source=ruckus-ap", headers={"Authorization": "Bearer " + tokens.create("cut")[1]}).json()["scan_cut"] is True
+    finally:
+        query.BUDGET_SECONDS = saved
+    ok = client.get("/v1/top?source=ruckus-ap", headers={"Authorization": "Bearer " + tokens.create("nocut")[1]}).json()
+    assert ok["scan_cut"] is False and ok["truncated"] is False
 
 
 def test_viewer():
@@ -370,6 +416,8 @@ def main():
     test_tokens_page()
     test_sources_page()
     test_naming_devices_in_the_ui_from_a_clean_start()
+    test_viewer_form_shows_every_filter_and_short_windows()
+    test_viewer_tells_a_normal_limit_from_a_real_cut()
     test_viewer()
     test_login_pauses_after_too_many_wrong_passwords()
     test_changing_the_password_ends_other_sessions()

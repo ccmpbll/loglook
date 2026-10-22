@@ -14,6 +14,7 @@ from app.services import clock, logreader
 from app.services.sources import Config
 from app.services.text import clean, iso, normalize, strip_control
 
+MIN_HOURS = 1 / 12  # five minutes
 MAX_HOURS = 24 * 14
 MAX_AGO = 24 * 90
 LINES_MAX = 500
@@ -92,6 +93,7 @@ class Scan:
         tz = self.config.tz
         return {
             "window": {"start": iso(self.start.astimezone(tz)), "end": iso(self.end.astimezone(tz)), "hours": self.hours, "ago": self.ago},
+            "scan_cut": self.truncated,  # the read itself stopped early (time or line limit); "truncated" also covers a limit on what is returned
             "scanned": self.scanned,
             "matched": self.matched,
             "unparsed": self.stats.unparsed,

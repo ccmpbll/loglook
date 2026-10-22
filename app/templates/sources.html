@@ -7,45 +7,41 @@
 {% if flash_ok %}<p class="ok">{{ flash_ok }}</p>{% endif %}
 {% set unmapped = statuses | rejectattr('mapped') | list %}
 {% set quiet = statuses | selectattr('quiet') | list %}
-{% if unmapped %}<p class="error">{{ unmapped | length }} device{{ 's' if unmapped | length != 1 }} sending logs {{ 'has' if unmapped | length == 1 else 'have' }} no name yet: give each one below.</p>{% endif %}
+{% if unmapped %}<p class="error">{{ unmapped | length }} device{{ 's' if unmapped | length != 1 }} sending logs {{ 'has' if unmapped | length == 1 else 'have' }} no name yet: type a name below and press Name it.</p>{% endif %}
 {% if quiet %}<p class="error">Quiet for longer than expected: {{ quiet | map(attribute='name') | join(', ') }}</p>{% endif %}
 <div class="card">
   <table class="stack">
-    <thead><tr><th>Source</th><th>IP</th><th>Last line</th><th>Lines, last hour</th><th>Size</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>IP</th><th>Last line</th><th>Lines, last hour</th><th>Size</th><th>Flag if quiet for</th><th></th></tr></thead>
     <tbody>
       {% for s in statuses %}
+      {% set fid = 'src-' ~ loop.index %}
       <tr>
-        <td data-label="Source">{{ s.name or 'unnamed' }}{% if s.quiet %} <span class="badge failed">quiet</span>{% elif not s.mapped %} <span class="badge running">no name</span>{% endif %}</td>
-        <td data-label="IP">{{ s.ip }}</td>
+        <td data-label="Name">
+          <form id="{{ fid }}" method="post" action="{{ '/sources/' ~ s.ip ~ '/update' if s.mapped else '/sources/add' }}"></form>
+          {% if not s.mapped %}<input type="hidden" name="ip" value="{{ s.ip }}" form="{{ fid }}" />{% endif %}
+          <input type="text" name="name" form="{{ fid }}" value="{{ s.name or '' }}" placeholder="Name" required maxlength="40" aria-label="Name for {{ s.ip }}" />
+        </td>
+        <td data-label="IP">{{ s.ip }}{% if s.quiet %} <span class="badge failed">quiet</span>{% elif not s.mapped %} <span class="badge running">no name</span>{% endif %}</td>
         <td data-label="Last line">{{ s.last_seen[:19].replace('T', ' ') if s.last_seen else 'never' }}</td>
         <td data-label="Lines, last hour">{{ s.lines_last_hour }}</td>
         <td data-label="Size">{{ '%.1f' | format(s.bytes / 1048576) }} MB</td>
+        <td data-label="Flag if quiet for"><input type="text" class="narrow" name="quiet_after" form="{{ fid }}" value="{{ s.quiet_after or '' }}" placeholder="15m" maxlength="8" aria-label="Flag {{ s.ip }} if quiet for" /></td>
         <td class="actions-cell" data-label="">
-          {% if s.mapped %}
-          <div class="actions"><a class="btn secondary" href="/logs?source={{ s.name }}">View</a>
-            <details class="edit"><summary class="btn secondary">Edit</summary>
-              <form method="post" action="/sources/{{ s.ip }}/update">
-                <label>Name<input type="text" name="name" value="{{ s.name }}" required maxlength="40" /></label>
-                <label>Flag if quiet for<input type="text" name="quiet_after" value="{{ s.quiet_after or '' }}" placeholder="15m, 24h or 2d" maxlength="8" /></label>
-                <div class="actions"><button type="submit">Save</button></div>
-              </form>
-              <form method="post" action="/sources/{{ s.ip }}/remove" onsubmit="return confirm('Remove {{ s.name }}? Its logs stay; it just shows as having no name.');"><button type="submit" class="danger">Remove</button></form>
-            </details>
+          <div class="actions">
+            <button type="submit" form="{{ fid }}">{{ 'Save' if s.mapped else 'Name it' }}</button>
+            {% if s.mapped %}
+            <a class="btn secondary" href="/logs?source={{ s.name }}">View</a>
+            <form method="post" action="/sources/{{ s.ip }}/remove" onsubmit="return confirm('Remove {{ s.name }}? Its logs stay; it just shows as having no name.');"><button type="submit" class="danger">Remove</button></form>
+            {% endif %}
           </div>
-          {% else %}
-          <form method="post" action="/sources/add" class="actions">
-            <input type="hidden" name="ip" value="{{ s.ip }}" />
-            <input type="text" name="name" placeholder="Name" required maxlength="40" aria-label="Name for {{ s.ip }}" />
-            <button type="submit">Name it</button>
-          </form>
-          {% endif %}
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="muted">No logs found in the log folder yet. Add a device by IP below, or point a device's syslog at your server.</td></tr>
+      <tr><td colspan="7" class="muted">No logs found in the log folder yet. Add a device by IP below, or point a device's syslog at your server.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  <p class="muted">Flag if quiet for: how long without a log line before a device is flagged, like <code>15m</code>, <code>24h</code> or <code>2d</code>. Leave empty for never.</p>
 </div>
 
 <div class="card">

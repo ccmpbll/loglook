@@ -7,7 +7,7 @@ from app.services import clock, query, sources
 # Read-only JSON for callers with a token (the nightly sweep, Claude). Nothing here changes anything.
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_token)])
 
-Hours = Query(24.0, ge=0.25, le=query.MAX_HOURS, description="how long the window is, in hours")
+Hours = Query(24.0, ge=query.MIN_HOURS, le=query.MAX_HOURS, description="how long the window is, in hours")
 Ago = Query(0.0, ge=0, le=query.MAX_AGO, description="how many hours before now the window ends")
 
 

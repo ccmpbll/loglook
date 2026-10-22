@@ -337,6 +337,13 @@ def test_viewer_tells_a_normal_limit_from_a_real_cut():
     assert ok["scan_cut"] is False and ok["truncated"] is False
 
 
+def test_the_page_has_an_icon():
+    for html in (TestClient(app).get("/login").text, admin.get("/logs").text):
+        assert '<link rel="icon" href="/static/logo.png?v=' in html
+    r = TestClient(app).get("/static/logo.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG", "the icon is served without a login"
+
+
 def test_viewer():
     r = admin.get("/logs?source=ruckus-ap&q=status=fail")
     assert r.status_code == 200 and "<mark>status=fail</mark>" in r.text and "1 matched" in r.text
@@ -416,6 +423,7 @@ def main():
     test_tokens_page()
     test_sources_page()
     test_naming_devices_in_the_ui_from_a_clean_start()
+    test_the_page_has_an_icon()
     test_viewer_form_shows_every_filter_and_short_windows()
     test_viewer_tells_a_normal_limit_from_a_real_cut()
     test_viewer()

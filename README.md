@@ -56,7 +56,7 @@ is fixed or deleted.
 Create a token on the Tokens page; it is shown once and only a hash is stored. Send it as
 `Authorization: Bearer <token>`. Every token is read-only.
 
-Every query takes `source` (a name from the Sources page), `hours` (window length, default 24, up to 336)
+Every query takes `source` (a name from the Sources page), `hours` (window length, default 24, from 0.0833 (5 minutes) up to 336)
 and `ago` (how many hours before now the window ends, default 0), so day *k* back is
 `hours=24&ago=24*k`. Filters: `q` (contains, any case), `include` and `exclude` (regular expressions).
 
@@ -74,7 +74,7 @@ curl -H "Authorization: Bearer $TOKEN" \
   'https://loglook.example.com/v1/count?source=wifi-ap&pattern=STA%20([0-9a-f:]{17})%20IEEE&hours=24'
 ```
 
-Results are bounded in lines, bytes and time, and say so (`truncated`). Regular expressions have a time
+Results are bounded in lines, bytes and time, and say so: `truncated` means something was left out, `scan_cut` means the read itself stopped early (time or line limit). Regular expressions have a time
 budget per line, so a pattern that backtracks badly is refused instead of hanging the service. Log text
 is untrusted: control characters are stripped, and the pages escape everything they show.
 

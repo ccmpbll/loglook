@@ -18,26 +18,19 @@
         <option value="count" {{ 'selected' if view == 'count' }}>Count by captured value</option>
       </select>
     </label>
-    <label>Last (hours)
+    <label>Last
       <select name="hours">
-        {% for h in hours_options %}<option value="{{ h }}" {{ 'selected' if hours == h }}>{{ h }}{{ ' (' ~ (h // 24) ~ ' days)' if h >= 48 }}</option>{% endfor %}
-        {% if hours not in hours_options %}<option value="{{ hours }}" selected>{{ hours }}</option>{% endif %}
+        {% for h, label in windows %}<option value="{{ h }}" {{ 'selected' if hours == h }}>{{ label }}</option>{% endfor %}
+        {% if hours not in windows | map(attribute=0) | list %}<option value="{{ hours }}" selected>{{ hours }} hours</option>{% endif %}
       </select>
     </label>
-    <label>Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
+    <label>Ending (hours ago)<input type="number" name="ago" min="0" step="any" value="{{ ago }}" /></label>
+    <label class="wide">Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
+    <label>Matches (regex)<input type="text" name="include" value="{{ include }}" maxlength="300" /></label>
+    <label>Excludes (regex)<input type="text" name="exclude" value="{{ exclude }}" maxlength="300" /></label>
+    {% if view == 'lines' %}<label>Lines (up to 500)<input type="number" name="limit" min="1" max="500" value="{{ limit }}" /></label>{% endif %}
+    {% if view == 'count' %}<label class="wide">Count per (regex with one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>{% endif %}
   </div>
-  {% if view == 'count' %}
-  <label>Count per (regex with one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>
-  {% endif %}
-  <details class="more" {{ 'open' if include or exclude or ago > 0 }}>
-    <summary>More filters</summary>
-    <div class="form-grid">
-      <label>Matches (regex)<input type="text" name="include" value="{{ include }}" maxlength="300" /></label>
-      <label>Excludes (regex)<input type="text" name="exclude" value="{{ exclude }}" maxlength="300" /></label>
-      <label>Ending (hours ago)<input type="number" name="ago" min="0" step="any" value="{{ ago }}" /></label>
-      {% if view == 'lines' %}<label>Lines (up to 500)<input type="number" name="limit" min="1" max="500" value="{{ limit }}" /></label>{% endif %}
-    </div>
-  </details>
   <div class="actions form-actions"><button type="submit">Search</button><a class="btn secondary" href="/logs?source={{ source }}">Reset</a></div>
 </form>
 
@@ -48,7 +41,8 @@
 <p class="muted">
   {{ result.window.start[:16].replace('T', ' ') }} to {{ result.window.end[:16].replace('T', ' ') }} ·
   {{ result.scanned }} lines read, {{ result.matched }} matched{% if result.unparsed %}, {{ result.unparsed }} unreadable{% endif %}
-  {% if result.truncated %} · <span class="error">results were cut; narrow the window or the filter</span>{% endif %}
+  {% if result.scan_cut %} · <span class="error">stopped reading early (time or line limit): these results cover only part of the window; narrow the window or the filter</span>
+  {% elif view == 'lines' and result.matched > result.returned %} · showing the newest {{ result.returned }} of {{ result.matched }} matches{% endif %}
 </p>
 
 {% if view == 'lines' %}

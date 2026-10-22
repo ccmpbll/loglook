@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sources - loglook{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Sources</h1></div>
+{% if error %}<p class="error">sources.yml: {{ error }}</p>{% endif %}
+{% set unmapped = statuses | rejectattr('mapped') | list %}
+{% set quiet = statuses | selectattr('quiet') | list %}
+{% if unmapped %}<p class="error">{{ unmapped | length }} source{{ 's' if unmapped | length != 1 }} writing logs with no entry in sources.yml: {{ unmapped | map(attribute='ip') | join(', ') }}</p>{% endif %}
+{% if quiet %}<p class="error">Quiet for longer than expected: {{ quiet | map(attribute='name') | join(', ') }}</p>{% endif %}
+<div class="card">
+  <table class="stack">
+    <thead><tr><th>Source</th><th>IP</th><th>Last line</th><th>Lines, last hour</th><th>Files</th><th>Size</th><th></th></tr></thead>
+    <tbody>
+      {% for s in statuses %}
+      <tr>
+        <td data-label="Source">{{ s.name or 'unmapped' }}{% if s.quiet %} <span class="badge failed">quiet</span>{% elif not s.mapped %} <span class="badge running">unmapped</span>{% endif %}</td>
+        <td data-label="IP">{{ s.ip }}</td>
+        <td data-label="Last line">{{ s.last_seen[:19].replace('T', ' ') if s.last_seen else 'never' }}</td>
+        <td data-label="Lines, last hour">{{ s.lines_last_hour }}</td>
+        <td data-label="Files">{{ s.files | length }}</td>
+        <td data-label="Size">{{ '%.1f' | format(s.bytes / 1048576) }} MB</td>
+        <td class="actions-cell" data-label="">{% if s.name %}<a class="btn secondary" href="/logs?source={{ s.name }}">View</a>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No sources yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

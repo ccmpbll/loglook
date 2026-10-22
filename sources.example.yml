@@ -1,0 +1,6 @@
+# Which IP is which device. Copy to ./config/sources.yml.
+tz: America/New_York        # the zone your devices' clocks are in (syslog lines carry no zone)
+sources:
+  10.0.0.1: {name: firewall, quiet_after: 24h}   # flag it if nothing arrives for 24 hours
+  10.0.0.2: {name: switch}
+  10.0.0.5: {name: wifi-ap,  quiet_after: 15m}

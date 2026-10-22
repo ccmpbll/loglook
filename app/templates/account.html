@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Account - loglook{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Account</h1></div>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+<div class="card">
+  <div class="section-head"><h3>Change your password</h3></div>
+  <form method="post" action="/account/password">
+    <label>Current password<input type="password" name="current_password" required /></label>
+    <label>New password<input type="password" name="new_password" required /></label>
+    <label>Confirm new password<input type="password" name="new_password_confirm" required /></label>
+    <button type="submit">Update password</button>
+  </form>
+</div>
+{% endblock %}

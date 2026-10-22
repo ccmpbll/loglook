@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Log in - loglook{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>loglook</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}" />
+    <label>Username<input type="text" name="username" autofocus required /></label>
+    <label>Password<input type="password" name="password" required /></label>
+    <button type="submit">Log in</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}loglook{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css?v={{ STATIC_VERSION }}" />
+</head>
+<body>
+  {% set user = current_user(request) %}
+  {% if user %}
+  <header class="topbar">
+    <a class="brand" href="/">loglook</a><span class="version">{{ APP_VERSION }}</span>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Show the menu" />
+    <label for="nav-toggle" class="menu-btn">Menu</label>
+    {% set path = request.url.path %}
+    <nav>
+      {% for href, label in [("/logs", "Logs"), ("/sources", "Sources"), ("/tokens", "Tokens"), ("/account", "Account")] %}
+      <a href="{{ href }}"{% if path.startswith(href) %} class="active" aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <form method="post" action="/logout" class="logout-form">
+      <span class="who">{{ user.username }}</span>
+      <button type="submit">Log out</button>
+    </form>
+  </header>
+  {% endif %}
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/local-time.js?v={{ STATIC_VERSION }}"></script>
+</body>
+</html>

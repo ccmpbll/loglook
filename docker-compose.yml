@@ -1,0 +1,19 @@
+services:
+  loglook:
+    image: ccmpbll/loglook:latest
+    container_name: loglook
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Optional. If unset, a random key is generated on first start and kept in ./data/secret_key.
+      LOGLOOK_SECRET_KEY: "${LOGLOOK_SECRET_KEY:-}"
+      # Uncomment only when served over TLS (your reverse proxy terminates it).
+      # LOGLOOK_SECURE_COOKIES: "true"
+    volumes:
+      # The folder your syslog server writes to (Unraid: /mnt/user/syslog), read-only.
+      - /mnt/user/syslog:/logs:ro
+      # sources.yml lives here: which IP is which device (see sources.example.yml).
+      - ./config:/config
+      # The admin login and the API tokens.
+      - ./data:/data

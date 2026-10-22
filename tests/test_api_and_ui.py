@@ -255,6 +255,44 @@ def test_viewer():
     cfg.write_text(fx.SOURCES_YML)
 
 
+def test_login_pauses_after_too_many_wrong_passwords():
+    from app.routers import auth as auth_router
+    auth_router._failures.clear()
+    other = TestClient(app, follow_redirects=False)
+    for _ in range(auth_router.MAX_FAILURES):
+        assert other.post("/login", data={"username": "chris", "password": "wrong"}).status_code == 400
+    r = other.post("/login", data={"username": "chris", "password": "another-pass1"})
+    assert r.status_code == 429 and "Too many" in r.text, "even the right password waits"
+    assert other.get("/account").status_code == 303
+    clock.now = lambda: fx.NOW + timedelta(minutes=11)
+    try:
+        assert other.post("/login", data={"username": "chris", "password": "another-pass1"}).status_code == 303, "the pause ends"
+    finally:
+        clock.now = lambda: fx.NOW
+        auth_router._failures.clear()
+    assert other.post("/login", data={"username": "nobody", "password": "wrong"}).status_code == 400, "an unknown name looks like a wrong password"
+
+
+def test_changing_the_password_ends_other_sessions():
+    a, b = TestClient(app, follow_redirects=False), TestClient(app, follow_redirects=False)
+    for c in (a, b):
+        assert c.post("/login", data={"username": "chris", "password": "another-pass1"}).status_code == 303
+        assert c.get("/account").status_code == 200
+    a.post("/account/password", data={"current_password": "another-pass1", "new_password": "third-pass-12", "new_password_confirm": "third-pass-12"})
+    assert a.get("/account").status_code == 200, "the session that changed it stays in"
+    assert b.get("/account").status_code == 303, "the other one is signed out"
+    a.post("/account/password", data={"current_password": "third-pass-12", "new_password": "another-pass1", "new_password_confirm": "another-pass1"})
+    admin.post("/login", data={"username": "chris", "password": "another-pass1"})
+
+
+def test_odd_numbers_do_not_crash_the_pages():
+    assert admin.get("/logs?source=switch&hours=nan&ago=nan").status_code == 200
+    assert admin.get("/logs?source=switch&hours=inf").status_code == 200
+    page = admin.post("/tokens", data={"name": "huge", "expires_days": "9" * 5000})
+    assert page.status_code == 400 and "between 1 and" in page.text
+    assert "whole number" in admin.post("/tokens", data={"name": "huge", "expires_days": "1e3"}).text
+
+
 def main():
     test_tokens()
     test_api()
@@ -263,6 +301,9 @@ def main():
     test_tokens_page()
     test_sources_page()
     test_viewer()
+    test_login_pauses_after_too_many_wrong_passwords()
+    test_changing_the_password_ends_other_sessions()
+    test_odd_numbers_do_not_crash_the_pages()
     print("OK: tokens are hashed and read-only, /v1 and the pages stay apart, the viewer escapes what it shows.")
 
 

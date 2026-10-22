@@ -27,12 +27,14 @@ def tokens_page(request: Request):
 
 @router.post("/tokens", response_class=HTMLResponse)
 def create_token(request: Request, name: str = Form(...), note: str = Form(""), expires_days: str = Form(""), user=Depends(require_login)):
+    expires_days = expires_days.strip()
+    if expires_days and not (expires_days.isascii() and expires_days.isdigit()):
+        return _page(request, error="Expiry must be a whole number of days.")
+    days = int(expires_days[:9]) if expires_days else None  # a huge number is cut, then refused as out of range
     try:
-        days = int(expires_days) if expires_days.strip() else None
         row, token = tokens.create(name, note, days)
     except ValueError as exc:
-        text = str(exc)
-        return _page(request, error="Expiry must be a whole number of days." if text.startswith("invalid literal") else text)
+        return _page(request, error=str(exc))
     tokens.admin_audit(user.username, "create token", f"{row.name}" + (f", expires in {days} days" if days else ""))
     # Rendered directly (not redirected) so the token is shown once and never ends up in a URL or history.
     return _page(request, new_token=(row.name, token))

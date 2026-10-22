@@ -3,6 +3,7 @@ per captured value. All read-only, all bounded in lines, bytes and time.
 
 Every query shares one window (`hours` long, ending `ago` hours before now) and one filter
 (`q` literal text, `include` and `exclude` regular expressions)."""
+import time
 from collections import Counter, deque
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,7 +12,7 @@ import regex as regex_module
 
 from app.services import clock, logreader
 from app.services.sources import Config
-from app.services.text import clean, iso, normalize
+from app.services.text import clean, iso, normalize, strip_control
 
 MAX_HOURS = 24 * 14
 MAX_AGO = 24 * 90
@@ -73,13 +74,13 @@ class Scan:
         self.timed_out = False
 
     def lines(self):
-        deadline = clock.now() + timedelta(seconds=BUDGET_SECONDS)
+        deadline = time.monotonic() + BUDGET_SECONDS
         for line in logreader.read_window(self.files, self.start, self.end, self.now, self.config.tz, self.stats):
             self.scanned += 1
             if self.flt(line.text):
                 self.matched += 1
                 yield line
-            if self.scanned % 5000 == 0 and clock.now() > deadline:
+            if time.monotonic() > deadline:  # every line: a slow pattern can spend REGEX_BUDGET on each one
                 self.timed_out = True
                 return
 
@@ -107,7 +108,7 @@ def lines(config: Config, source: str, files: list[Path], hours: float, ago: flo
         kept.append(line)
     out, size, cut = [], 0, False
     for line in reversed(kept):  # newest first while the byte budget lasts
-        item = {"time": iso(line.ts.astimezone(config.tz)), "host": line.host, "text": clean(line.text, LINE_CHARS)}
+        item = {"time": iso(line.ts.astimezone(config.tz)), "host": clean(line.host, 100), "text": clean(line.text, LINE_CHARS)}
         size += len(item["text"]) + 60
         if size > LINES_MAX_BYTES:
             cut = True
@@ -123,7 +124,7 @@ def top(config: Config, source: str, files: list[Path], hours: float, ago: float
     groups: dict[str, list] = {}  # key -> [count, first, last, example]
     overflow = 0
     for line in scan.lines():
-        key = normalize(line.text)
+        key = normalize(strip_control(line.text))
         g = groups.get(key)
         if g is None:
             if len(groups) >= MAX_KEYS:
@@ -162,7 +163,7 @@ def count(config: Config, source: str, files: list[Path], hours: float, ago: flo
         if m is None:
             continue
         counted += 1
-        key = " ".join(g for g in m.groups() if g is not None) if rx.groups else ""
+        key = clean(" ".join(g for g in m.groups() if g is not None), LINE_CHARS) if rx.groups else ""
         if key in counts or len(counts) < MAX_KEYS:
             counts[key] += 1
         else:

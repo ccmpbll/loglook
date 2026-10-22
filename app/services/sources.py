@@ -155,24 +155,21 @@ def _entry(name: str, quiet_after: str) -> dict:
     return {"name": name.strip(), **({"quiet_after": quiet_after.strip()} if quiet_after.strip() else {})}
 
 
-def add(ip: str, name: str, quiet_after: str = "") -> None:
-    ip = ip.strip()
-
+def _set(ip: str, name: str, quiet_after: str, adding: bool) -> None:
     def change(data):
-        if ip in data["sources"]:
-            raise ConfigError(f"{ip} already has a name")
+        if (ip in data["sources"]) == adding:
+            raise ConfigError(f"{ip} already has a name" if adding else f"{ip} is not a named source")
         data["sources"][ip] = _entry(name, quiet_after)
 
     _edit(change)
+
+
+def add(ip: str, name: str, quiet_after: str = "") -> None:
+    _set(ip.strip(), name, quiet_after, True)
 
 
 def update(ip: str, name: str, quiet_after: str = "") -> None:
-    def change(data):
-        if ip not in data["sources"]:
-            raise ConfigError(f"{ip} is not a named source")
-        data["sources"][ip] = _entry(name, quiet_after)
-
-    _edit(change)
+    _set(ip, name, quiet_after, False)
 
 
 def remove(ip: str) -> None:

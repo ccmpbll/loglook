@@ -43,18 +43,9 @@ holds the timezone: syslog lines carry no zone, so they are read as local time i
 (default `America/New_York`), and the year is inferred. A device that has not sent anything yet can be
 added by its IP.
 
-The page keeps this in `./config/sources.yml` (mount the Config folder, writable, not just the file). You never need to
-open it, but it is plain YAML and a hand edit is picked up:
-
-```
-tz: America/New_York
-sources:
-  10.0.0.1:
-    name: firewall
-    quiet_after: 24h
-  10.0.0.2:
-    name: switch
-```
+The page keeps this in `./config/sources.yml` (mount the Config folder, writable, not just the file).
+You never need to open it, but it is plain YAML (`tz:` and a `sources:` map of IP to `name` and optional
+`quiet_after`) and a hand edit is picked up.
 
 Saving from the page rewrites the file, so comments you add by hand are lost. If an edit stops parsing,
 the last good one stays in use, the Sources page shows the error, and changes are paused until the file

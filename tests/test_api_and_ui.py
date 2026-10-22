@@ -12,7 +12,7 @@ Run directly: python3 tests/test_api_and_ui.py
 """
 import shutil
 import sys
-from time import sleep as time_sleep
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -133,7 +133,6 @@ def test_api():
         assert getattr(client, method)("/v1/lines?source=switch", headers=H(plain)).status_code == 405, "nothing in /v1 changes anything"
 
     # a bad edit to sources.yml: the API keeps working from the last good one
-    import time
     time.sleep(0.01)
     cfg.write_text("sources: [broken\n")
     h = client.get("/v1/health", headers=H(plain)).json()
@@ -288,7 +287,7 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
             sources.CONFIG_PATH = saved
     finally:
         logging.getLogger("loglook").removeHandler(handler)
-        time_sleep(0.01)
+        time.sleep(0.01)
         cfg.write_text(original)
 
 
@@ -313,7 +312,6 @@ def test_viewer():
 
     # whatever the logs contain is escaped, never rendered
     (logs / "syslog-10.9.9.7.log").write_text(f"{fx.stamp(fx.LOCAL_NOW - timedelta(minutes=2))} h <img src=x onerror=alert(1)> and <script>alert(2)</script> ok\n")
-    import time
     time.sleep(0.01)
     cfg.write_text(fx.SOURCES_YML + "  10.9.9.7:    {name: nasty}\n")
     (logs / "syslog-10.9.9.7.log").write_text(f"{fx.stamp(fx.LOCAL_NOW - timedelta(minutes=2))} h <img src=x onerror=alert(1)> ok <script>alert(2)</script>\n")

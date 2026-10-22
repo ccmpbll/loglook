@@ -298,7 +298,8 @@ def test_viewer_form_shows_every_filter_and_short_windows():
     assert "<details" not in page and "More filters" not in page, "nothing is hidden"
     for name in ("q", "include", "exclude", "ago", "limit", "hours"):
         assert f'name="{name}"' in page, name
-    assert '<label class="wide">Contains' in page
+    assert '<label class="full">Contains' in page and page.index('name="exclude"') < page.index('name="limit"') < page.index('name="q"'), "Contains is last, full width"
+    assert page.index('name="q"') < page.index('class="actions form-actions"'), "and sits above the buttons"
     for value, label in (("0.08333333333333333", "5 minutes"), ("0.25", "15 minutes"), ("0.5", "30 minutes"), ("24", "24 hours"), ("336", "14 days")):
         assert f'<option value="{value}" >{label}</option>' in page or f'<option value="{value}" selected>{label}</option>' in page, label
     assert '<option value="24" selected>24 hours</option>' in page, "24 hours by default"

@@ -25,11 +25,11 @@
       </select>
     </label>
     <label>Ending (hours ago)<input type="number" name="ago" min="0" step="any" value="{{ ago }}" /></label>
-    <label class="wide">Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
     <label>Matches (regex)<input type="text" name="include" value="{{ include }}" maxlength="300" /></label>
     <label>Excludes (regex)<input type="text" name="exclude" value="{{ exclude }}" maxlength="300" /></label>
     {% if view == 'lines' %}<label>Lines (up to 500)<input type="number" name="limit" min="1" max="500" value="{{ limit }}" /></label>{% endif %}
     {% if view == 'count' %}<label class="wide">Count per (regex with one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>{% endif %}
+    <label class="full">Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
   </div>
   <div class="actions form-actions"><button type="submit">Search</button><a class="btn secondary" href="/logs?source={{ source }}">Reset</a></div>
 </form>

@@ -234,10 +234,19 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
 
     from app.services import sources
 
+    import logging
+    import re
+
+    logged = []
+    handler = logging.Handler()
+    handler.emit = lambda record: logged.append(record.getMessage())
+    logging.getLogger("loglook").addHandler(handler)
     plain_token = tokens.create("uisources")[1]
     original = cfg.read_text()
     cfg.unlink()
     try:
+        h = client.get("/v1/health", headers=H(plain_token)).json()
+        assert h["status"] == "degraded" and h["sources"] == 0, "nothing named yet is not 'ok'"
         page = admin.get("/sources").text
         assert "sources.yml has a problem" not in page and "no name yet" in page and "10.42.11.5" in page, "first run: no file, and no error"
         assert "No sources named yet" in admin.get("/logs").text
@@ -256,6 +265,11 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
             r = admin.post(url, data=form)
             assert words in r.text and "class=\"error\"" in r.text, (url, words)
         assert "Timezone is now UTC." in admin.post("/sources/timezone", data={"tz": "UTC"}).text
+        assert "admin chris: Added ap (10.42.11.5)." in logged, logged
+        r = admin.post("/sources/timezone", data={"tz": "x" * 6000})
+        flash = re.search(r'<p class="error">(.*?)</p>', r.text, re.S).group(1)
+        assert "unknown timezone" in flash and len(flash) <= 320, "an error is cut short: the session is a cookie"
+        assert "not a named source" in admin.post("/sources/10.42.11.200/remove").text, "removing what is not there says so"
         admin.post("/sources/add", data={"ip": "10.42.11.9", "name": "other"})
         assert "Removed 10.42.11.9." in admin.post("/sources/10.42.11.9/remove").text
         assert "10.42.11.9" not in cfg.read_text() and "wifi-ap" in cfg.read_text()
@@ -273,6 +287,7 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
         finally:
             sources.CONFIG_PATH = saved
     finally:
+        logging.getLogger("loglook").removeHandler(handler)
         time_sleep(0.01)
         cfg.write_text(original)
 

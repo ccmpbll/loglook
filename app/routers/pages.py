@@ -12,6 +12,7 @@ router = APIRouter(dependencies=[Depends(require_login)])
 
 VIEWS = ("lines", "top", "count")
 HOURS = (1, 6, 24, 72, 168, 336)
+ZONES = sorted(available_timezones())  # for the timezone box on the Sources page
 
 
 @router.get("/", include_in_schema=False)
@@ -22,7 +23,7 @@ def home():
 @router.get("/sources", response_class=HTMLResponse)
 def sources_page(request: Request):
     config, error = sources.get_config()
-    ctx = {"error": error, "statuses": sources.all_statuses(config) if config else [], "tz": config.tz.key if config else sources.DEFAULT_TZ, "zones": sorted(available_timezones()), "flash_error": request.session.pop("sources_error", ""), "flash_ok": request.session.pop("sources_ok", "")}
+    ctx = {"error": error, "statuses": sources.all_statuses(config) if config else [], "tz": config.tz.key if config else sources.DEFAULT_TZ, "zones": ZONES, "flash_error": request.session.pop("sources_error", ""), "flash_ok": request.session.pop("sources_ok", "")}
     return templates.TemplateResponse(request, "sources.html", ctx)
 
 

@@ -43,7 +43,7 @@ holds the timezone: syslog lines carry no zone, so they are read as local time i
 (default `America/New_York`), and the year is inferred. A device that has not sent anything yet can be
 added by its IP.
 
-The page keeps this in `./config/sources.yml` (the Config folder must be writable). You never need to
+The page keeps this in `./config/sources.yml` (mount the Config folder, writable, not just the file). You never need to
 open it, but it is plain YAML and a hand edit is picked up:
 
 ```

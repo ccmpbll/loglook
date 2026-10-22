@@ -37,7 +37,7 @@ def run(fn, *args):
 @router.get("/health")
 def health():
     config, error = sources.get_config()
-    return {"status": "ok" if config and not error else "degraded", "version": VERSION, "config_error": error or None, "sources": len(config.sources) if config else 0, "time": clock.now().isoformat(timespec="seconds")}
+    return {"status": "ok" if config and config.sources and not error else "degraded", "version": VERSION, "config_error": error or None, "sources": len(config.sources) if config else 0, "time": clock.now().isoformat(timespec="seconds")}
 
 
 @router.get("/sources")

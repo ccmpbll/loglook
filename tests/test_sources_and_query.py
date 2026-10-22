@@ -94,6 +94,7 @@ def test_the_sources_page_writes_the_file_so_nobody_has_to():
             (lambda: sources.add("10.0.0.9", "bad name"), "name must be"),
             (lambda: sources.add("10.0.0.9", "x", "soon"), "quiet_after must look like"),
             (lambda: sources.update("10.0.0.99", "x"), "not a named source"),
+            (lambda: sources.remove("10.0.0.99"), "not a named source"),
             (lambda: sources.set_timezone("Mars/Base"), "unknown timezone"),
         ):
             before = path.read_text()
@@ -106,13 +107,48 @@ def test_the_sources_page_writes_the_file_so_nobody_has_to():
         sources.add("10.0.0.7", "tmp")
         assert sources.get_config()[0].tz.key == "UTC", "saving a source keeps the timezone"
         sources.remove("10.0.0.7")
+        sources.add("10.0.0.8", "zero", "0m")
+        sources.add("10.0.0.9", "other")
+        assert "0m" in path.read_text() and sources.get_config()[0].by_name("zero").quiet_after == timedelta(0), "a zero threshold survives a save"
+        assert {s["ip"]: s for s in sources.all_statuses(sources.get_config()[0])}["10.0.0.8"]["quiet_after"] == "0m"
+        sources.remove("10.0.0.8")
+        sources.remove("10.0.0.9")
         for minutes, text in ((15, "15m"), (90, "90m"), (120, "2h"), (2880, "2d")):
             assert sources.format_duration(timedelta(minutes=minutes)) == text
         sources.remove("10.0.0.5")
         sources.remove("10.0.0.1")
-        sources.remove("10.0.0.1")
+        raises(lambda: sources.remove("10.0.0.1"), "not a named source")
         c, err = sources.get_config()
-        assert c.sources == {} and not err, "the last one can go; removing twice is harmless"
+        assert c.sources == {} and not err, "the last one can go; removing it twice says so"
+        sources.add("10.0.0.6", "ab")
+        sources.get_config()
+        real_replace, before = os.replace, path.stat().st_mtime_ns
+
+        def same_time_replace(src, dst):
+            real_replace(src, dst)
+            os.utime(dst, ns=(before, before))  # as on a share with coarse timestamps
+
+        sources.os.replace = same_time_replace
+        try:
+            sources.update("10.0.0.6", "cd", "")  # same size, same timestamp
+            assert sources.get_config()[0].by_name("cd"), "our own write is seen even when the timestamp did not move"
+        finally:
+            sources.os.replace = real_replace
+        sources.remove("10.0.0.6")
+
+        def busy(src, dst):
+            raise OSError(16, "Device or resource busy")
+
+        sources.os.replace = busy
+        try:
+            try:
+                sources.add("10.0.0.7", "busy")
+                raise AssertionError("replaced the file")
+            except OSError:
+                pass
+            assert not list(path.parent.glob("*.tmp")), "the temporary file is removed when the write fails"
+        finally:
+            sources.os.replace = real_replace
         # a hand edit is still picked up, and a broken file is never overwritten
         path.write_text("tz: UTC\nsources:\n  1.2.3.4: {name: hand}\n")
         assert sources.get_config()[0].by_name("hand")

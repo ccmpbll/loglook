@@ -103,7 +103,7 @@ def parse(text: str) -> Config:
 
 def format_duration(delta: timedelta) -> str:
     minutes = int(delta.total_seconds() // 60)
-    return f"{minutes // 1440}d" if minutes % 1440 == 0 else f"{minutes // 60}h" if minutes % 60 == 0 else f"{minutes}m"
+    return f"{minutes // 1440}d" if minutes and minutes % 1440 == 0 else f"{minutes // 60}h" if minutes and minutes % 60 == 0 else f"{minutes}m"
 
 
 _cache: dict = {"stamp": None, "config": None, "error": ""}
@@ -137,13 +137,18 @@ def _edit(change) -> None:
         config, error = get_config()
         if error:
             raise ConfigError(f"sources.yml has a problem: {error}. Fix or delete it, then try again.")
-        data = {"tz": config.tz.key, "sources": {ip: {"name": s.name, **({"quiet_after": format_duration(s.quiet_after)} if s.quiet_after else {})} for ip, s in config.sources.items()}}
+        data = {"tz": config.tz.key, "sources": {ip: {"name": s.name, **({"quiet_after": format_duration(s.quiet_after)} if s.quiet_after is not None else {})} for ip, s in config.sources.items()}}
         change(data)
         text = yaml.safe_dump(data, sort_keys=False)
         parse(text)  # the same checks as a hand-written file
         tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
-        tmp.write_text(text)
-        os.replace(tmp, CONFIG_PATH)
+        try:
+            tmp.write_text(text)
+            os.replace(tmp, CONFIG_PATH)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
+        _cache["stamp"] = None  # re-read next time: a coarse file timestamp must not hide our own write
 
 
 def _entry(name: str, quiet_after: str) -> dict:
@@ -171,7 +176,11 @@ def update(ip: str, name: str, quiet_after: str = "") -> None:
 
 
 def remove(ip: str) -> None:
-    _edit(lambda data: data["sources"].pop(ip, None))
+    def change(data):
+        if data["sources"].pop(ip, None) is None:
+            raise ConfigError(f"{ip} is not a named source")
+
+    _edit(change)
 
 
 def set_timezone(tz: str) -> None:
@@ -204,7 +213,7 @@ def status(ip: str, files: list[Path], source: Source | None, tz: ZoneInfo) -> d
         "ip": ip,
         "name": source.name if source else None,
         "mapped": source is not None,
-        "quiet_after": format_duration(source.quiet_after) if source and source.quiet_after else "",
+        "quiet_after": format_duration(source.quiet_after) if source and source.quiet_after is not None else "",
         "last_seen": iso(last.astimezone(tz)) if last else None,
         "age_seconds": int(age) if age is not None else None,
         "quiet": quiet,

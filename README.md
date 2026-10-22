@@ -84,7 +84,8 @@ is untrusted: control characters are stripped, and the pages escape everything t
 - The log folder is mounted read-only and nothing in the API writes anywhere.
 - The pages (cookie login) and the API (bearer tokens) are separate: a token cannot open a page, and a
   signed-in browser is not accepted on `/v1`.
-- Only the SHA-256 of a token is stored. Tokens can be disabled, given an expiry, or deleted at any time.
+- Only the SHA-256 of a token is stored. Tokens can be disabled, given an expiry, or deleted at any time;
+  each of those, and every API call (with the token name), is written to the container log.
 - API docs and the schema are not served.
 - After 10 wrong passwords within 10 minutes, logins pause for a few minutes. Changing the password signs out every other browser. Logging out only clears that browser's cookie, so keep `LOGLOOK_SECRET_KEY` private (or change it to end every session).
 
@@ -100,19 +101,17 @@ is untrusted: control characters are stripped, and the pages escape everything t
 
 ## Data
 
-`./data` holds `loglook.db` (the admin account, tokens, a small audit of token changes) and
-`secret_key`. Losing it only means creating the account and tokens again.
+`./data` holds `loglook.db` (the admin account and the tokens) and `secret_key`. Losing it only means creating the account and tokens again.
 
 ## Development
 
 ```
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements-test.txt
 ./tests/run_all.sh
 ```
 
 Each file in `tests/` is a standalone script that builds a syslog folder from real log lines and checks
-the reader, the queries, the tokens, the API and the pages. CI runs the same script, and the image
-includes it (`docker run --rm --entrypoint ./tests/run_all.sh ccmpbll/loglook`).
+the reader, the queries, the tokens, the API and the pages. CI runs the same script.
 
 ## License
 

@@ -5,7 +5,7 @@ Every query shares one window (`hours` long, ending `ago` hours before now) and 
 (`q` literal text, `include` and `exclude` regular expressions)."""
 import time
 from collections import Counter, deque
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import regex as regex_module

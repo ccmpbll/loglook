@@ -1,7 +1,7 @@
 """Self-check for tokens, the /v1 API and the admin pages.
 
   1. Tokens: only the hash is stored, the plaintext is shown once; disabled and expired tokens are
-     refused; last-used is stamped; names are validated; changes are audited.
+     refused; last-used is stamped; names are validated; changes go to the log.
   2. /v1 is read-only JSON behind a bearer token and nothing else (a cookie login does not work
      there, a token does not open a page, no docs or schema are served).
   3. The pages: first-run setup, login with return-to that never leaves the site, password change,
@@ -27,7 +27,7 @@ from sqlmodel import Session, select  # noqa: E402
 
 from app.database import engine, init_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import AdminAudit, ApiToken, User, utcnow  # noqa: E402
+from app.models import ApiToken, User, utcnow  # noqa: E402
 from app.services import clock, tokens  # noqa: E402
 
 clock.now = lambda: fx.NOW
@@ -194,6 +194,13 @@ def test_setup_login_password():
 
 
 def test_tokens_page():
+    import logging
+
+    logged = []
+    handler = logging.Handler()
+    handler.emit = lambda record: logged.append(record.getMessage())
+    logging.getLogger("loglook").addHandler(handler)
+    logging.getLogger("loglook").setLevel(logging.INFO)
     r = admin.post("/tokens", data={"name": "sweep", "note": "nightly", "expires_days": "30"})
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     plain = r.text.split('<pre id="new-token">')[1].split("</pre>")[0]
@@ -209,9 +216,9 @@ def test_tokens_page():
     assert tokens.authenticate(plain)[1] == "token disabled"
     admin.post(f"/tokens/{tid}/delete")
     assert tokens.authenticate(plain)[0] is None
-    with Session(engine) as s:
-        actions = [a.action for a in s.exec(select(AdminAudit)).all()]
-    assert actions == ["create token", "toggle token", "delete token"], actions
+    assert [m.split(" token")[0] for m in logged] == ["admin chris created", "admin chris toggled", "admin chris deleted"], logged
+    assert "sweep" in logged[0] and "expires in 30 days" in logged[0]
+    logging.getLogger("loglook").removeHandler(handler)
 
 
 def test_sources_page():

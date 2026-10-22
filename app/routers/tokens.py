@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -7,6 +9,7 @@ from app.templating import templates
 
 # Admin side of the API tokens: cookie login only. A token can never open this page.
 router = APIRouter(dependencies=[Depends(require_login)])
+logger = logging.getLogger("loglook")  # who changed which token goes to the container log
 
 
 def _page(request: Request, error: str | None = None, new_token: tuple[str, str] | None = None):
@@ -35,7 +38,7 @@ def create_token(request: Request, name: str = Form(...), note: str = Form(""), 
         row, token = tokens.create(name, note, days)
     except ValueError as exc:
         return _page(request, error=str(exc))
-    tokens.admin_audit(user.username, "create token", f"{row.name}" + (f", expires in {days} days" if days else ""))
+    logger.info("admin %s created token %s%s", user.username, row.name, f", expires in {days} days" if days else "")
     # Rendered directly (not redirected) so the token is shown once and never ends up in a URL or history.
     return _page(request, new_token=(row.name, token))
 
@@ -43,12 +46,12 @@ def create_token(request: Request, name: str = Form(...), note: str = Form(""), 
 @router.post("/tokens/{token_id}/toggle")
 def toggle_token(token_id: int, user=Depends(require_login)):
     tokens.toggle(token_id)
-    tokens.admin_audit(user.username, "toggle token", f"token id {token_id}")
+    logger.info("admin %s toggled token id %s", user.username, token_id)
     return RedirectResponse("/tokens", status_code=303)
 
 
 @router.post("/tokens/{token_id}/delete")
 def delete_token(token_id: int, user=Depends(require_login)):
     tokens.delete_token(token_id)
-    tokens.admin_audit(user.username, "delete token", f"token id {token_id}")
+    logger.info("admin %s deleted token id %s", user.username, token_id)
     return RedirectResponse("/tokens", status_code=303)

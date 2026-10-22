@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}loglook{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v={{ STATIC_VERSION }}" />
+  <link rel="stylesheet" href="/static/style.css?v={{ APP_VERSION }}" />
 </head>
 <body>
   {% set user = current_user(request) %}
@@ -28,6 +28,6 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
-  <script src="/static/local-time.js?v={{ STATIC_VERSION }}"></script>
+  <script src="/static/local-time.js?v={{ APP_VERSION }}"></script>
 </body>
 </html>

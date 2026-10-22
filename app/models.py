@@ -30,11 +30,3 @@ class ApiToken(SQLModel, table=True):
     last_used_at: Optional[datetime] = None
 
 
-class AdminAudit(SQLModel, table=True):
-    """Changes made on the Tokens page, kept apart from anything an API caller can write."""
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    at: datetime = Field(default_factory=utcnow)
-    admin: str = ""
-    action: str = ""
-    detail: str = ""

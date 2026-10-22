@@ -1,4 +1,3 @@
-import hashlib
 import re
 from pathlib import Path
 
@@ -10,7 +9,6 @@ from app.auth import current_user
 from app.config import VERSION
 
 templates_dir = Path(__file__).parent / "templates"
-static_dir = Path(__file__).parent / "static"
 
 templates = Jinja2Templates(directory=str(templates_dir))
 templates.env.globals["current_user"] = current_user
@@ -50,10 +48,3 @@ def highlight(text: str, q: str = "", include: str = "") -> Markup:
 
 templates.env.filters["local_time"] = local_time
 templates.env.filters["highlight"] = highlight
-
-# Cache-busting token for static assets, so a browser that cached style.css picks up changes.
-_hash = hashlib.sha256()
-for _asset in (static_dir / "style.css", static_dir / "local-time.js"):
-    if _asset.exists():
-        _hash.update(_asset.read_bytes())
-templates.env.globals["STATIC_VERSION"] = _hash.hexdigest()[:10]

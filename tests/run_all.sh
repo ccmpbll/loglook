@@ -5,7 +5,7 @@
 #
 #   ./tests/run_all.sh
 #
-# Needs Python 3.10+ with requirements.txt installed — the app uses `X | None`
+# Needs Python 3.10+ with requirements-test.txt installed — the app uses `X | None`
 # annotations, which are a runtime TypeError on 3.9. Set PYTHON to point at a
 # specific interpreter; otherwise .venv/bin/python is used if it exists.
 #
@@ -29,9 +29,9 @@ if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>
   exit 2
 fi
 
-if ! "$PY" -c 'import fastapi, sqlmodel' 2>/dev/null; then
+if ! "$PY" -c 'import fastapi, sqlmodel, httpx' 2>/dev/null; then
   echo "error: dependencies missing — run:" >&2
-  echo "       $PY -m pip install -r requirements.txt" >&2
+  echo "       $PY -m pip install -r requirements-test.txt" >&2
   exit 2
 fi
 

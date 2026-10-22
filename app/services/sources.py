@@ -1,11 +1,15 @@
 """Which IP is which device.
 
-`sources.yml` maps each source IP to a name and, optionally, how long silence is worth flagging. It is
-re-read when it changes; a file that stops parsing keeps the last good one in service and the error
-shows on the Sources page. Files in the log folder with no entry are reported as `unmapped`.
+`sources.yml` maps each source IP to a name and, optionally, how long silence is worth flagging. The
+Sources page writes it (nobody has to edit it by hand, though a hand edit is picked up). It is re-read
+when it changes; a file that stops parsing keeps the last good one in service and the error shows on
+the Sources page. No file yet is an empty config. Files in the log folder with no entry are reported as
+`unmapped`.
 """
 import ipaddress
+import os
 import re
+import threading
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -60,6 +64,7 @@ def parse(text: str) -> Config:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise ConfigError(f"not valid YAML: {exc}") from None
+    data = {} if data is None else data  # an empty file is an empty config
     if not isinstance(data, dict):
         raise ConfigError("expected a mapping with `tz` and `sources`")
     extra = set(data) - {"tz", "sources"}
@@ -69,9 +74,9 @@ def parse(text: str) -> Config:
         tz = ZoneInfo(str(data.get("tz", DEFAULT_TZ)))
     except (ZoneInfoNotFoundError, ValueError):
         raise ConfigError(f"unknown timezone {data.get('tz')!r}") from None
-    raw = data.get("sources")
-    if not isinstance(raw, dict) or not raw:
-        raise ConfigError("`sources` must list at least one IP")
+    raw = data.get("sources") or {}
+    if not isinstance(raw, dict):
+        raise ConfigError("`sources` must map each IP to a name")
     sources: dict[str, Source] = {}
     names: set[str] = set()
     for key, body in raw.items():
@@ -96,22 +101,81 @@ def parse(text: str) -> Config:
     return Config(tz, sources)
 
 
-_cache: dict = {"mtime": None, "config": None, "error": ""}
+def format_duration(delta: timedelta) -> str:
+    minutes = int(delta.total_seconds() // 60)
+    return f"{minutes // 1440}d" if minutes % 1440 == 0 else f"{minutes // 60}h" if minutes % 60 == 0 else f"{minutes}m"
+
+
+_cache: dict = {"stamp": None, "config": None, "error": ""}
+_lock = threading.Lock()  # one edit at a time: each reads the file, changes it, writes it back
 
 
 def get_config() -> tuple[Config | None, str]:
-    """The current config and any error text. A config that stops parsing keeps the last good one."""
+    """The current config and any error text. No file yet is an empty config; a file that stops
+    parsing keeps the last good one."""
     try:
-        mtime = CONFIG_PATH.stat().st_mtime_ns
-    except OSError:
-        return _cache["config"], f"{CONFIG_PATH} was not found"
-    if mtime != _cache["mtime"]:
-        _cache["mtime"] = mtime
+        st = CONFIG_PATH.stat()
+    except FileNotFoundError:
+        _cache.update(stamp=None, config=None, error="")
+        return Config(ZoneInfo(DEFAULT_TZ), {}), ""
+    except OSError as exc:
+        return _cache["config"], f"{CONFIG_PATH}: {exc.strerror}"
+    stamp = (st.st_mtime_ns, st.st_size)
+    if stamp != _cache["stamp"]:
+        _cache["stamp"] = stamp
         try:
             _cache["config"], _cache["error"] = parse(CONFIG_PATH.read_text()), ""
         except Exception as exc:  # noqa: BLE001 - a bad file (bad bytes, unreadable, absurd value) keeps the last good config
             _cache["error"] = str(exc) or type(exc).__name__
     return _cache["config"], _cache["error"]
+
+
+def _edit(change) -> None:
+    """Change the config as a plain dict, check the result like any file, and write it in one step.
+    A file that does not parse is never overwritten: fix or delete it first."""
+    with _lock:
+        config, error = get_config()
+        if error:
+            raise ConfigError(f"sources.yml has a problem: {error}. Fix or delete it, then try again.")
+        data = {"tz": config.tz.key, "sources": {ip: {"name": s.name, **({"quiet_after": format_duration(s.quiet_after)} if s.quiet_after else {})} for ip, s in config.sources.items()}}
+        change(data)
+        text = yaml.safe_dump(data, sort_keys=False)
+        parse(text)  # the same checks as a hand-written file
+        tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
+        tmp.write_text(text)
+        os.replace(tmp, CONFIG_PATH)
+
+
+def _entry(name: str, quiet_after: str) -> dict:
+    return {"name": name.strip(), **({"quiet_after": quiet_after.strip()} if quiet_after.strip() else {})}
+
+
+def add(ip: str, name: str, quiet_after: str = "") -> None:
+    ip = ip.strip()
+
+    def change(data):
+        if ip in data["sources"]:
+            raise ConfigError(f"{ip} already has a name")
+        data["sources"][ip] = _entry(name, quiet_after)
+
+    _edit(change)
+
+
+def update(ip: str, name: str, quiet_after: str = "") -> None:
+    def change(data):
+        if ip not in data["sources"]:
+            raise ConfigError(f"{ip} is not a named source")
+        data["sources"][ip] = _entry(name, quiet_after)
+
+    _edit(change)
+
+
+def remove(ip: str) -> None:
+    _edit(lambda data: data["sources"].pop(ip, None))
+
+
+def set_timezone(tz: str) -> None:
+    _edit(lambda data: data.update(tz=tz.strip()))
 
 
 def discover(directory: Path | None = None) -> dict[str, list[Path]]:
@@ -140,6 +204,7 @@ def status(ip: str, files: list[Path], source: Source | None, tz: ZoneInfo) -> d
         "ip": ip,
         "name": source.name if source else None,
         "mapped": source is not None,
+        "quiet_after": format_duration(source.quiet_after) if source and source.quiet_after else "",
         "last_seen": iso(last.astimezone(tz)) if last else None,
         "age_seconds": int(age) if age is not None else None,
         "quiet": quiet,

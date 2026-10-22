@@ -4,7 +4,7 @@
 <div class="page-header"><h1>Logs</h1></div>
 {% if config_error %}<p class="error">sources.yml: {{ config_error }}</p>{% endif %}
 {% if not names %}
-<p class="empty">No sources configured yet. Add them to sources.yml.</p>
+<p class="empty">No sources named yet. <a href="/sources">Name your devices</a> first.</p>
 {% else %}
 <form method="get" action="/logs" class="card">
   <div class="form-grid">

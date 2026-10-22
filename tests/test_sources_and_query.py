@@ -46,7 +46,7 @@ def test_config_parse():
     raises(lambda: sources.parse("not: [valid"), "not valid YAML")
     raises(lambda: sources.parse("- a\n- b\n"), "expected a mapping")
     raises(lambda: sources.parse("tz: Mars/Base\nsources:\n  1.2.3.4: {name: a}\n"), "unknown timezone")
-    raises(lambda: sources.parse("sources: {}\n"), "at least one")
+    assert sources.parse("sources: {}\n").sources == {} and sources.parse("").sources == {} and sources.parse("tz: UTC\n").tz.key == "UTC", "no sources yet is a valid config"
     raises(lambda: sources.parse("sources:\n  nope: {name: a}\n"), "not an IPv4")
     raises(lambda: sources.parse("sources:\n  1.2.3.4: {name: 'bad name!'}\n"), "name must be")
     raises(lambda: sources.parse("sources:\n  1.2.3.4: {name: a}\n  1.2.3.5: {name: a}\n"), "used twice")
@@ -69,6 +69,66 @@ def test_config_reload_keeps_last_good():
     time.sleep(0.01)
     cfg.write_text(fx.SOURCES_YML)
     sources.get_config()
+
+
+def test_the_sources_page_writes_the_file_so_nobody_has_to():
+    import os
+    import tempfile
+    from pathlib import Path
+
+    saved_path = sources.CONFIG_PATH
+    sources.CONFIG_PATH = path = Path(tempfile.mkdtemp()) / "sources.yml"
+    try:
+        c, err = sources.get_config()
+        assert c.sources == {} and err == "" and c.tz.key == "America/New_York", "no file yet: an empty config, not an error"
+        sources.add("10.0.0.5", " wifi-ap ", "15m")
+        sources.add("10.0.0.1", "firewall")
+        c, err = sources.get_config()
+        assert not err and c.by_name("wifi-ap").quiet_after == timedelta(minutes=15) and c.sources["10.0.0.1"].quiet_after is None
+        assert not list(path.parent.glob("*.tmp")), "the temporary file is renamed over the real one"
+        assert sources.parse(path.read_text()).by_name("firewall").ip == "10.0.0.1", "what is written is a normal sources.yml"
+        for bad, words in (
+            (lambda: sources.add("10.0.0.5", "again"), "already has a name"),
+            (lambda: sources.add("10.0.0.9", "firewall"), "used twice"),
+            (lambda: sources.add("not-an-ip", "x"), "not an IPv4"),
+            (lambda: sources.add("10.0.0.9", "bad name"), "name must be"),
+            (lambda: sources.add("10.0.0.9", "x", "soon"), "quiet_after must look like"),
+            (lambda: sources.update("10.0.0.99", "x"), "not a named source"),
+            (lambda: sources.set_timezone("Mars/Base"), "unknown timezone"),
+        ):
+            before = path.read_text()
+            raises(bad, words)
+            assert path.read_text() == before, f"a refused change leaves the file alone ({words})"
+        sources.update("10.0.0.5", "ap", "")
+        assert sources.get_config()[0].by_name("ap").quiet_after is None, "an empty box clears the threshold"
+        sources.set_timezone("UTC")
+        assert sources.get_config()[0].tz.key == "UTC" and sources.get_config()[0].by_name("ap"), "changing the zone keeps the sources"
+        sources.add("10.0.0.7", "tmp")
+        assert sources.get_config()[0].tz.key == "UTC", "saving a source keeps the timezone"
+        sources.remove("10.0.0.7")
+        for minutes, text in ((15, "15m"), (90, "90m"), (120, "2h"), (2880, "2d")):
+            assert sources.format_duration(timedelta(minutes=minutes)) == text
+        sources.remove("10.0.0.5")
+        sources.remove("10.0.0.1")
+        sources.remove("10.0.0.1")
+        c, err = sources.get_config()
+        assert c.sources == {} and not err, "the last one can go; removing twice is harmless"
+        # a hand edit is still picked up, and a broken file is never overwritten
+        path.write_text("tz: UTC\nsources:\n  1.2.3.4: {name: hand}\n")
+        assert sources.get_config()[0].by_name("hand")
+        path.write_text("sources: [broken\n")
+        raises(lambda: sources.add("10.0.0.5", "wifi-ap"), "has a problem")
+        assert path.read_text() == "sources: [broken\n", "a broken file is left for its owner to fix"
+        path.unlink()
+        sources.CONFIG_PATH = Path("/nonexistent-folder/sources.yml")
+        try:
+            sources.add("10.0.0.5", "wifi-ap")
+            raise AssertionError("wrote into a folder that does not exist")
+        except OSError:
+            pass
+    finally:
+        sources.CONFIG_PATH = saved_path
+        sources.get_config()
 
 
 def test_status_unmapped_and_quiet():
@@ -232,6 +292,7 @@ def test_nothing_returned_carries_control_characters():
 def main():
     test_config_parse()
     test_config_reload_keeps_last_good()
+    test_the_sources_page_writes_the_file_so_nobody_has_to()
     test_status_unmapped_and_quiet()
     test_lines()
     test_control_characters_and_markup_in_log_text_are_returned_clean()

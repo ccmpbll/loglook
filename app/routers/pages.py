@@ -1,4 +1,5 @@
 import math
+from zoneinfo import available_timezones
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -21,7 +22,8 @@ def home():
 @router.get("/sources", response_class=HTMLResponse)
 def sources_page(request: Request):
     config, error = sources.get_config()
-    return templates.TemplateResponse(request, "sources.html", {"error": error, "statuses": sources.all_statuses(config) if config else []})
+    ctx = {"error": error, "statuses": sources.all_statuses(config) if config else [], "tz": config.tz.key if config else sources.DEFAULT_TZ, "zones": sorted(available_timezones()), "flash_error": request.session.pop("sources_error", ""), "flash_ok": request.session.pop("sources_ok", "")}
+    return templates.TemplateResponse(request, "sources.html", ctx)
 
 
 @router.get("/logs", response_class=HTMLResponse)

@@ -13,7 +13,7 @@ services:
     volumes:
       # The folder your syslog server writes to (Unraid: /mnt/user/syslog), read-only.
       - /mnt/user/syslog:/logs:ro
-      # sources.yml lives here: which IP is which device (see sources.example.yml).
+      # sources.yml lives here, written by the Sources page: which IP is which device. Must be writable.
       - ./config:/config
       # The admin login and the API tokens.
       - ./data:/data

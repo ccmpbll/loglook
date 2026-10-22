@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import SECRET_KEY, SECURE_COOKIES
 from app.database import init_db
-from app.routers import api, auth, pages, tokens
+from app.routers import api, auth, pages, sources, tokens
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("loglook")
@@ -50,4 +50,5 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(api.router)
 app.include_router(auth.router)
 app.include_router(pages.router)
+app.include_router(sources.router)
 app.include_router(tokens.router)

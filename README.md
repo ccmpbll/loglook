@@ -1,6 +1,6 @@
 # loglook
 
-A small, read-only service for looking at the syslog files your syslog server already writes. It lets a
+A small, read-only service for looking at the syslog files your syslog server already writes - created for use with the syslog server built into Unraid. It lets a
 script (an n8n workflow, an AI agent) or you, in a browser, ask "what did the switch say in the last
 24 hours" without reading gigabytes of rotated files.
 

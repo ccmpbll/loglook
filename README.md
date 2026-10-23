@@ -1,3 +1,5 @@
+<img src="app/static/logo.png" alt="loglook logo" width="265">
+
 # loglook
 
 A small, read-only service for looking at the syslog files your syslog server already writes - created for use with the syslog server built into Unraid. It lets a

@@ -1,6 +1,4 @@
-<img src="app/static/logo.png" alt="loglook logo" width="265">
-
-# loglook
+# <img src="app/static/logo.png" alt="" width="64"> loglook
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/ccmpbll/loglook/docker.yml) ![Tests](https://img.shields.io/github/actions/workflow/status/ccmpbll/loglook/tests.yml) ![Docker Image Size](https://img.shields.io/docker/image-size/ccmpbll/loglook/latest) ![Docker Pulls](https://img.shields.io/docker/pulls/ccmpbll/loglook.svg) ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 

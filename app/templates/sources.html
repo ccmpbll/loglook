@@ -44,6 +44,29 @@
   <p class="muted">Flag if quiet for: how long without a log line before a device is flagged, like <code>15m</code>, <code>24h</code> or <code>2d</code>. Leave empty for never.</p>
 </div>
 
+{% if containers or docker_error %}
+<div class="card">
+  <div class="section-head"><h3>Containers</h3></div>
+  {% if docker_error %}<p class="error">{{ docker_error }}</p>{% endif %}
+  {% if containers %}
+  <table class="stack">
+    <thead><tr><th>Name</th><th>State</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for c in containers %}
+      <tr>
+        <td data-label="Name">{{ c.container }}</td>
+        <td data-label="State">{{ c.state }}</td>
+        <td data-label="Status">{{ c.status }}</td>
+        <td class="actions-cell" data-label=""><div class="actions"><a class="btn secondary" href="/logs?source={{ c.name }}">View</a></div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">Read from Docker, read-only. How far back a container goes is up to Docker's own log rotation.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <div class="section-head"><h3>Add a device by IP</h3></div>
   <p class="muted">For a device that has not sent anything yet. Devices already sending appear above with a Name it button.</p>

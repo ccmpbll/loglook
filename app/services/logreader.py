@@ -233,3 +233,14 @@ def last_line_time(files: list[Path], now: datetime, tz: ZoneInfo) -> datetime |
             if line is not None:
                 return line.ts
     return None
+
+
+class FileSet:
+    """One syslog source's files, read through the same interface as a Docker container:
+    `read_window(start, end, stats)`, with the clock and timezone bound in."""
+
+    def __init__(self, files: list[Path], now: datetime, tz: ZoneInfo):
+        self.files, self.now, self.tz = files, now, tz
+
+    def read_window(self, start: datetime, end: datetime, stats: ReadStats | None = None) -> Iterator[Line]:
+        return read_window(self.files, start, end, self.now, self.tz, stats)

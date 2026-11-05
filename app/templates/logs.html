@@ -4,7 +4,7 @@
 <div class="page-header"><h1>Logs</h1></div>
 {% if config_error %}<p class="error">sources.yml: {{ config_error }}</p>{% endif %}
 {% if not names %}
-<p class="empty">No sources named yet. <a href="/sources">Name your devices</a> first.</p>
+<p class="empty">No logs found yet. Point a device's syslog at your server, or mount the Docker socket to read container logs. See <a href="/sources">Sources</a>.</p>
 {% else %}
 <form method="get" action="/logs" class="card">
   <div class="form-row" style="--n: 4">
@@ -42,7 +42,7 @@
 {% if result %}
 <p class="muted">
   {{ result.window.start[:16].replace('T', ' ') }} to {{ result.window.end[:16].replace('T', ' ') }} ·
-  {{ result.scanned }} lines read, {{ result.matched }} matched{% if result.unparsed %}, {{ result.unparsed }} unreadable{% endif %}
+  {{ result.scanned }} lines read{% if result.first_line %} (oldest {{ result.first_line[5:16].replace('T', ' ') }}){% endif %}, {{ result.matched }} matched{% if result.unparsed %}, {{ result.unparsed }} unreadable{% endif %}
   {% if result.scan_cut %} · <span class="error">stopped reading early (time or line limit): these results cover only part of the window; narrow the window or the filter</span>
   {% elif view == 'lines' and result.matched > result.returned %} · showing the newest {{ result.returned }} of {{ result.matched }} matches{% endif %}
 </p>

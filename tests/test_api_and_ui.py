@@ -28,7 +28,7 @@ from sqlmodel import Session, select  # noqa: E402
 
 from app.database import engine, init_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import ApiToken, User, utcnow  # noqa: E402
+from app.models import ApiToken, User  # noqa: E402
 from app.services import clock, tokens  # noqa: E402
 
 clock.now = lambda: fx.NOW
@@ -73,7 +73,7 @@ def test_tokens():
     tokens.toggle(row.id)
     with Session(engine) as s:
         t = s.get(ApiToken, row.id)
-        t.expires_at = utcnow() - timedelta(days=1)
+        t.expires_at = fx.NOW - timedelta(days=1)  # relative to the test clock, not the wall clock
         s.add(t)
         s.commit()
     assert tokens.authenticate(plain)[1] == "token expired"
@@ -247,10 +247,11 @@ def test_naming_devices_in_the_ui_from_a_clean_start():
     cfg.unlink()
     try:
         h = client.get("/v1/health", headers=H(plain_token)).json()
-        assert h["status"] == "degraded" and h["sources"] == 0, "nothing named yet is not 'ok'"
+        assert h["status"] == "ok" and h["sources"] == 0, "nothing named yet is fine: everything is readable by IP without setup"
         page = admin.get("/sources").text
         assert "sources.yml has a problem" not in page and "no name yet" in page and "10.42.11.5" in page, "first run: no file, and no error"
-        assert "No sources named yet" in admin.get("/logs").text
+        first_run = admin.get("/logs").text
+        assert "lines read" in first_run and "No logs found yet" not in first_run, "first run: devices nobody has named yet are readable by IP, no setup needed"
         r = admin.post("/sources/add", data={"ip": "10.42.11.5", "name": "ap", "quiet_after": "15m"})
         assert r.status_code == 200 and "Added ap (10.42.11.5)" in r.text, "the file is created by the first save"
         assert cfg.exists() and "ap" in cfg.read_text()

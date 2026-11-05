@@ -5,15 +5,16 @@ Every query shares one window (`hours` long, ending `ago` hours before now) and 
 (`q` literal text, `include` and `exclude` regular expressions)."""
 import time
 from collections import Counter, deque
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import regex as regex_module
 
-from app.services import clock, logreader
+from app.services import clock, dockerlogs, logreader
 from app.services.sources import Config
 from app.services.text import clean, iso, normalize, strip_control
 
+Readable = list[Path] | dockerlogs.Container  # a syslog source's files, or a container
 MIN_HOURS = 1 / 12  # five minutes
 MAX_HOURS = 24 * 14
 MAX_AGO = 24 * 90
@@ -64,26 +65,34 @@ class Filter:
 class Scan:
     """One pass over the window, handing back the lines that pass the filter and keeping the totals."""
 
-    def __init__(self, config: Config, files: list[Path], hours: float, ago: float, flt: Filter):
-        self.config, self.files, self.flt = config, files, flt
+    def __init__(self, config: Config, files: Readable, hours: float, ago: float, flt: Filter):
+        self.config, self.flt = config, flt
         self.now = clock.now()
+        self.reader = files if hasattr(files, "read_window") else logreader.FileSet(files, self.now, config.tz)
         self.end = self.now - timedelta(hours=ago)
         self.start = self.end - timedelta(hours=hours)
         self.hours, self.ago = hours, ago
         self.scanned = self.matched = 0
         self.stats = logreader.ReadStats()
         self.timed_out = False
+        self.first: datetime | None = None  # the oldest line the reader gave us, filter or not
 
     def lines(self):
         deadline = time.monotonic() + BUDGET_SECONDS
-        for line in logreader.read_window(self.files, self.start, self.end, self.now, self.config.tz, self.stats):
-            self.scanned += 1
-            if self.flt(line.text):
-                self.matched += 1
-                yield line
-            if time.monotonic() > deadline:  # every line: a slow pattern can spend REGEX_BUDGET on each one
-                self.timed_out = True
-                return
+        reader = self.reader.read_window(self.start, self.end, self.stats)
+        try:
+            for line in reader:
+                self.scanned += 1
+                if self.first is None:
+                    self.first = line.ts
+                if self.flt(line.text):
+                    self.matched += 1
+                    yield line
+                if time.monotonic() > deadline:  # every line: a slow pattern can spend REGEX_BUDGET on each one
+                    self.timed_out = True
+                    return
+        finally:
+            reader.close()  # lets go of the Docker connection if we stopped early
 
     @property
     def truncated(self) -> bool:
@@ -97,11 +106,12 @@ class Scan:
             "scanned": self.scanned,
             "matched": self.matched,
             "unparsed": self.stats.unparsed,
+            "first_line": iso(self.first.astimezone(tz)) if self.first else None,  # much later than window.start on a busy source: older lines are gone (Docker's log rotation)
             "files": self.stats.files,
         }
 
 
-def lines(config: Config, source: str, files: list[Path], hours: float, ago: float, flt: Filter, limit: int) -> dict:
+def lines(config: Config, source: str, files: Readable, hours: float, ago: float, flt: Filter, limit: int) -> dict:
     """The most recent `limit` matching lines, oldest first. Cut by count and by total bytes."""
     limit = max(1, min(limit, LINES_MAX))
     scan = Scan(config, files, hours, ago, flt)
@@ -120,7 +130,7 @@ def lines(config: Config, source: str, files: list[Path], hours: float, ago: flo
     return {"source": source, **scan.header(), "returned": len(out), "truncated": cut or scan.matched > len(out) or scan.truncated, "lines": out}
 
 
-def top(config: Config, source: str, files: list[Path], hours: float, ago: float, flt: Filter, n: int) -> dict:
+def top(config: Config, source: str, files: Readable, hours: float, ago: float, flt: Filter, n: int) -> dict:
     """Matching lines normalised (MACs, IPs, hex and numbers replaced) and grouped, biggest first."""
     scan = Scan(config, files, hours, ago, flt)
     groups: dict[str, list] = {}  # key -> [count, first, last, example]
@@ -148,7 +158,7 @@ def top(config: Config, source: str, files: list[Path], hours: float, ago: float
     }
 
 
-def count(config: Config, source: str, files: list[Path], hours: float, ago: float, flt: Filter, pattern: str, n: int) -> dict:
+def count(config: Config, source: str, files: Readable, hours: float, ago: float, flt: Filter, pattern: str, n: int) -> dict:
     """Count matches of `pattern` per captured value. With one group the value is what it captured
     (for example a MAC); with several they are joined by a space; with none everything counts as one."""
     if not pattern:

@@ -14,6 +14,12 @@ LOG_DIR = Path(os.environ.get("LOGLOOK_LOG_DIR", "/logs"))
 # Which IP is which device, and what to ignore or watch for it.
 CONFIG_PATH = Path(os.environ.get("LOGLOOK_CONFIG", "/config/sources.yml"))
 
+# Container logs come from Docker's HTTP API, read-only GETs only. Nothing to set when the Docker
+# socket is mounted at DOCKER_SOCKET: it is used if it is there. To go through a socket proxy
+# instead (safer: it can allow only reads) set http://socket-proxy:2375; "off" turns containers off.
+DOCKER_URL = os.environ.get("LOGLOOK_DOCKER_URL", "").strip()
+DOCKER_SOCKET = "/var/run/docker.sock"
+
 DB_PATH = DATA_DIR / "loglook.db"
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 

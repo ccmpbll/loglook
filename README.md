@@ -2,9 +2,9 @@
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/ccmpbll/loglook/docker.yml) ![Tests](https://img.shields.io/github/actions/workflow/status/ccmpbll/loglook/tests.yml) ![Docker Image Size](https://img.shields.io/docker/image-size/ccmpbll/loglook/latest) ![Docker Pulls](https://img.shields.io/docker/pulls/ccmpbll/loglook.svg) ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
-A small, read-only service for looking at the syslog files your syslog server already writes - created for use with the syslog server built into Unraid. It lets a
+A small, read-only service for looking at the syslog files your syslog server already writes - created for use with the syslog server built into Unraid - and at your Docker containers' logs. It lets a
 script (an n8n workflow, an AI agent) or you, in a browser, ask "what did the switch say in the last
-24 hours" without reading gigabytes of rotated files.
+24 hours" or "what has the web container logged since lunch" without reading gigabytes of rotated files.
 
 It does not parse or judge anything device by device. It finds a time window in the files (across the
 live file and the rotated copies), filters it, and returns the lines, the lines grouped into patterns,
@@ -29,13 +29,40 @@ or counts per captured value. What counts as noise or a problem is up to whateve
 ```
 docker run -d --name loglook -p 8000:8000 \
   -v /mnt/user/syslog:/logs:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v ./config:/config -v ./data:/data \
   ccmpbll/loglook:latest
 ```
 
-or use `docker-compose.yml`. Open <http://localhost:8000>, create the admin account (first run only),
-then go to **Sources**: every device that has written a log file is listed with a **Name it** button.
+or use `docker-compose.yml`. Open <http://localhost:8000>, create the admin account (first run only).
+Everything that is logging is readable straight away: devices by their IP, containers as
+`docker:<name>`. Naming a device (on **Sources**, each unnamed one has a **Name it** button) is optional
+and only makes the name nicer and lets you flag silence.
 Serve it over HTTPS (a reverse proxy) and set `LOGLOOK_SECURE_COOKIES=true`.
+
+### Container logs
+
+Container logs are read from Docker's API with read-only requests (list containers, read a container's
+logs). Mount the Docker socket, as above, and containers appear with no other setup. Leave out the
+socket mount (or set `LOGLOOK_DOCKER_URL=off`) for syslog only.
+
+A mounted socket gives whatever can use it full control of Docker, and `:ro` does not change that (it
+only stops the socket file being replaced). loglook sends only the two read requests, but if you would
+rather it could not do more, connect through a socket proxy that allows only reads, and let it talk to
+that instead of mounting the socket:
+
+```
+LOGLOOK_DOCKER_URL=http://socket-proxy:2375
+```
+
+The proxy needs to allow `GET /containers/json` and `GET /containers/<id>/logs` from loglook (for
+[wollomatic/socket-proxy](https://github.com/wollomatic/socket-proxy) that is `SP_ALLOW_GET` and adding
+`loglook` to `SP_ALLOWFROM`), and loglook has to share a Docker network with it.
+
+How far back a container goes is up to Docker's own log rotation (on Unraid, Settings > Docker, log
+rotation: the default is small), not loglook. Every result carries `first_line`, the time of the oldest
+line it read: on a busy container, a `first_line` much later than `window.start` means older lines are gone.
+Containers are read by name, so a container that is updated keeps its name; its old log goes with the old container.
 
 ### Sources
 
@@ -63,7 +90,7 @@ and `ago` (how many hours before now the window ends, default 0), so day *k* bac
 `hours=24&ago=24*k`. Filters: `q` (contains, any case), `include` and `exclude` (regular expressions).
 
 ```
-GET /v1/health
+GET /v1/health                        "ok", or "degraded" if sources.yml or Docker has a problem
 GET /v1/sources                       every source: last line, quiet or not, lines in the last hour, unmapped
 GET /v1/lines?source=&limit=          the most recent matching lines, oldest first (up to 500)
 GET /v1/top?source=&top=              lines grouped into patterns: count, first, last, an example
@@ -82,7 +109,8 @@ is untrusted: control characters are stripped, and the pages escape everything t
 
 ## Security
 
-- The log folder is mounted read-only and nothing in the API writes anywhere.
+- The log folder is mounted read-only and nothing in the API writes anywhere. Docker is only ever asked to list containers and read their logs; with a read-only socket proxy that is all it is allowed to do.
+- With Docker connected, every token and every login can read the logs of **every** container, and those often hold secrets (URLs with keys, auth errors). Treat a token like one that can read all of them, or set `LOGLOOK_DOCKER_URL=off`.
 - The pages (cookie login) and the API (bearer tokens) are separate: a token cannot open a page, and a
   signed-in browser is not accepted on `/v1`.
 - Only the SHA-256 of a token is stored. Tokens can be disabled, given an expiry, or deleted at any time;
@@ -95,6 +123,7 @@ is untrusted: control characters are stripped, and the pages escape everything t
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOGLOOK_LOG_DIR` | `/logs` | the syslog folder (read-only is fine) |
+| `LOGLOOK_DOCKER_URL` | the mounted socket | `http://socket-proxy:2375`, `unix:///path`, or `off`; empty uses `/var/run/docker.sock` if it is mounted |
 | `LOGLOOK_CONFIG` | `/config/sources.yml` | where the Sources page keeps device names and the timezone |
 | `LOGLOOK_DATA_DIR` | `/data` | the admin login and tokens (`loglook.db`), the session key |
 | `LOGLOOK_SECRET_KEY` | generated | signs the session cookie |

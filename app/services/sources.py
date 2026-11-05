@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import yaml
 
 from app.config import CONFIG_PATH, LOG_DIR
-from app.services import clock, logreader
+from app.services import clock, dockerlogs, logreader
 from app.services.text import iso
 
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,40}$")
@@ -225,3 +225,22 @@ def all_statuses(config: Config) -> list[dict]:
     out = [status(ip, found.get(ip, []), src, config.tz) for ip, src in config.sources.items()]
     out += [status(ip, files, None, config.tz) for ip, files in found.items() if ip not in config.sources]
     return out
+
+
+def lookup(config: Config, name: str, docker: tuple[list, str] | None = None):
+    """The (source, files) a name stands for: a configured name, the IP of a device nobody has named
+    yet, or `docker:<container>`. (None, []) when there is no such thing. `files` is the container
+    itself for a Docker source, which is what the queries expect. A caller that already asked Docker
+    for its containers passes the answer as `docker` so it is not asked again."""
+    if name.startswith(dockerlogs.PREFIX):
+        c = next((c for c in (docker or dockerlogs.containers())[0] if c.name == name), None)
+        return c, c
+    found = discover()
+    src = config.by_name(name) or (Source(name, name) if name in found else None)
+    return (src, found.get(src.ip, [])) if src else (None, [])
+
+
+def pickable(config: Config, containers: list) -> list[str]:
+    """Every name the viewer can open: named devices, devices not yet named (by IP), containers."""
+    unnamed = [ip for ip in discover() if ip not in config.sources]
+    return [s.name for s in config.sources.values()] + unnamed + [c.name for c in containers]

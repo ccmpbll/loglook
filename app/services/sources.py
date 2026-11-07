@@ -108,6 +108,7 @@ def format_duration(delta: timedelta) -> str:
 
 _cache: dict = {"stamp": None, "config": None, "error": ""}
 _lock = threading.Lock()  # one edit at a time: each reads the file, changes it, writes it back
+_load_lock = threading.Lock()  # one parse at a time; apart from _lock because an edit calls get_config while holding it
 
 
 def get_config() -> tuple[Config | None, str]:
@@ -122,11 +123,13 @@ def get_config() -> tuple[Config | None, str]:
         return _cache["config"], f"{CONFIG_PATH}: {exc.strerror}"
     stamp = (st.st_mtime_ns, st.st_size)
     if stamp != _cache["stamp"]:
-        _cache["stamp"] = stamp
-        try:
-            _cache["config"], _cache["error"] = parse(CONFIG_PATH.read_text()), ""
-        except Exception as exc:  # noqa: BLE001 - a bad file (bad bytes, unreadable, absurd value) keeps the last good config
-            _cache["error"] = str(exc) or type(exc).__name__
+        with _load_lock:  # one caller parses, the rest wait for its answer instead of reading a half-filled cache
+            if stamp != _cache["stamp"]:
+                try:
+                    _cache["config"], _cache["error"] = parse(CONFIG_PATH.read_text()), ""
+                except Exception as exc:  # noqa: BLE001 - a bad file (bad bytes, unreadable, absurd value) keeps the last good config
+                    _cache["error"] = str(exc) or type(exc).__name__
+                _cache["stamp"] = stamp  # last, so "already read" is never true before the answer is in
     return _cache["config"], _cache["error"]
 
 

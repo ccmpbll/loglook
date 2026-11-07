@@ -55,6 +55,29 @@ def test_config_parse():
     raises(lambda: sources.parse("tz: UTC\nextra: 1\nsources:\n  1.2.3.4: {name: a}\n"), "unknown top-level")
 
 
+def test_parallel_first_requests_on_a_cold_cache_all_get_the_config():
+    # After a restart the first /v1 callers can arrive together (the nightly sweep sends 29 at once). One of them parses; the
+    # others must wait for its answer, not read the half-filled cache ("sources.yml is not usable: " with no reason, a 503).
+    import threading
+    real_parse = sources.parse
+    sources.parse = lambda text: (time.sleep(0.15), real_parse(text))[1]
+    try:
+        sources._cache.update(stamp=None, config=None, error="")
+        start, got = threading.Barrier(12), []
+
+        def call():
+            start.wait()
+            got.append(sources.get_config())
+
+        threads = [threading.Thread(target=call) for _ in range(12)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+    finally:
+        sources.parse = real_parse
+    assert len(got) == 12 and all(c is not None and not err for c, err in got), [(c is not None, err) for c, err in got]
+    assert len({id(c) for c, _ in got}) == 1, "one parse served everybody"
+
+
 def test_config_reload_keeps_last_good():
     c1, err = sources.get_config()
     assert c1 and not err
@@ -328,6 +351,7 @@ def test_nothing_returned_carries_control_characters():
 def main():
     test_config_parse()
     test_config_reload_keeps_last_good()
+    test_parallel_first_requests_on_a_cold_cache_all_get_the_config()
     test_the_sources_page_writes_the_file_so_nobody_has_to()
     test_status_unmapped_and_quiet()
     test_lines()

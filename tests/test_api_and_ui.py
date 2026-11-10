@@ -348,9 +348,10 @@ def test_viewer_tells_a_normal_limit_from_a_real_cut():
 
 def test_the_page_has_an_icon():
     for html in (TestClient(app).get("/login").text, admin.get("/logs").text):
-        assert '<link rel="icon" href="/static/logo.png?v=' in html
-    r = TestClient(app).get("/static/logo.png")
-    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG", "the icon is served without a login"
+        assert '<link rel="icon" href="/static/favicon.png?v=' in html
+    for name in ("favicon.png", "logo.png"):
+        r = TestClient(app).get(f"/static/{name}")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG", f"{name} is served without a login"
 
 
 def test_viewer():

@@ -1,22 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Logs - loglook{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Logs</h1></div>
+<div class="page-header"><div><h1>Logs</h1><p class="sub">Search what your devices and containers have been saying.</p></div></div>
 {% if config_error %}<p class="error">sources.yml: {{ config_error }}</p>{% endif %}
 {% if not names %}
 <p class="empty">No logs found yet. Point a device's syslog at your server, or mount the Docker socket to read container logs. See <a href="/sources">Sources</a>.</p>
 {% else %}
+<div class="subnav">
+  {% for key, label, href in tabs %}<a href="{{ href }}"{% if view == key %} class="active" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</div>
 <form method="get" action="/logs" class="card">
-  <div class="form-row" style="--n: 4">
+  <input type="hidden" name="view" value="{{ view }}" />
+  <div class="form-row" style="--n: 3">
     <label>Source
       <select name="source">{% for n in names %}<option value="{{ n }}" {{ 'selected' if n == source }}>{{ n }}</option>{% endfor %}</select>
-    </label>
-    <label>Show
-      <select name="view">
-        <option value="lines" {{ 'selected' if view == 'lines' }}>Lines</option>
-        <option value="top" {{ 'selected' if view == 'top' }}>Top patterns</option>
-        <option value="count" {{ 'selected' if view == 'count' }}>Count by captured value</option>
-      </select>
     </label>
     <label>Last
       <select name="hours">
@@ -33,7 +30,7 @@
     {% if view == 'count' %}<label>Count per (regex, one capture group)<input type="text" name="pattern" value="{{ pattern }}" maxlength="300" /></label>{% endif %}
   </div>
   <label>Contains<input type="text" name="q" value="{{ q }}" maxlength="200" /></label>
-  <div class="actions form-actions"><button type="submit">Search</button><a class="btn secondary" href="/logs?source={{ source }}">Reset</a></div>
+  <div class="actions form-actions"><button type="submit">Search</button><a class="btn ghost" href="/logs?source={{ source }}&view={{ view }}">Reset</a></div>
 </form>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}

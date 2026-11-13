@@ -230,6 +230,22 @@ def all_statuses(config: Config) -> list[dict]:
     return out
 
 
+def attention() -> int:
+    """How many devices want a look: sending logs with no name yet, or quiet for longer than their limit.
+    Read on every page for the Sources link, so it only looks at the newest line of the devices that have a limit."""
+    config, _ = get_config()
+    if config is None:
+        return 0
+    found = discover()
+    count = sum(1 for ip in found if ip not in config.sources)
+    now = clock.now()
+    for ip, src in config.sources.items():
+        if src.quiet_after is not None:
+            last = logreader.last_line_time(found.get(ip, []), now, config.tz)
+            count += last is None or (now - last).total_seconds() > src.quiet_after.total_seconds()
+    return count
+
+
 def lookup(config: Config, name: str, docker: tuple[list, str] | None = None):
     """The (source, files) a name stands for: a configured name, the IP of a device nobody has named
     yet, or `docker:<container>`. (None, []) when there is no such thing. `files` is the container

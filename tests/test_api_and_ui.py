@@ -230,6 +230,24 @@ def test_sources_page():
     assert 'name="name" form="src-' in page and 'name="quiet_after" form="src-' in page and "Name it" in page and ">Save<" in page
 
 
+def test_the_nav_flags_sources_that_need_a_look():
+    from app.services import sources
+    from app.templating import templates
+
+    assert sources.attention() == 2, "one device with no name (10.42.11.99) and one gone quiet (silent-box)"
+    page = admin.get("/logs?source=ruckus-ap").text
+    assert 'href="/sources" data-attn>Sources <span class="navcount">2</span>' in page, "boxed, with the count, on every page"
+    assert 'Menu <span class="navcount">2</span>' in page, "and on the phone's Menu button"
+    assert 'Tokens</a>' in page and 'href="/account"' in page and "Log out" in page, "Account and Log out live in the user menu"
+    real = templates.env.globals["sources_attention"]
+    templates.env.globals["sources_attention"] = lambda: 0
+    try:
+        page = admin.get("/logs?source=ruckus-ap").text
+        assert "data-attn" not in page and "navcount" not in page, "nothing to flag: a plain link"
+    finally:
+        templates.env.globals["sources_attention"] = real
+
+
 def test_naming_devices_in_the_ui_from_a_clean_start():
     from pathlib import Path
 
@@ -302,7 +320,13 @@ def test_viewer_form_shows_every_filter_and_short_windows():
     for name in ("q", "include", "exclude", "ago", "limit", "hours"):
         assert f'name="{name}"' in page, name
     rows = [m.group(1) for m in re.finditer(r'class="form-row" style="--n: (\d)"', page)]
-    assert rows == ["4", "3"], "four boxes on the first row, three spread across the second"
+    assert rows == ["3", "3"], "three boxes on the first row, three spread across the second"
+    assert 'name="view" value="lines"' in page and '<select name="view"' not in page, "the view is a tab now, kept by a hidden field"
+    tabs = re.search(r'<div class="subnav">(.*?)</div>', page, re.S).group(1)
+    assert re.findall(r">([^<]+)</a>", tabs) == ["Lines", "Top patterns", "Count by value"]
+    assert 'class="active" aria-current="page">Lines<' in tabs, "the view you are on is marked"
+    top = re.search(r'<div class="subnav">(.*?)</div>', admin.get("/logs?source=ruckus-ap&hours=0.25&q=abc&view=lines").text, re.S).group(1)
+    assert "view=top" in top and "q=abc" in top and "hours=0.25" in top and "source=ruckus-ap" in top, "each tab keeps the search typed so far"
     assert page.index('name="source"') < page.index('name="ago"') < page.index('name="include"') < page.index('name="exclude"') < page.index('name="limit"') < page.index('name="q"'), "Contains is last, on its own line"
     assert page.index('name="q"') < page.index('class="actions form-actions"'), "above the buttons"
     assert '--n: 2' in admin.get("/logs?source=ruckus-ap&view=top").text, "no Lines box in Top patterns: two spread out"
@@ -312,7 +336,7 @@ def test_viewer_form_shows_every_filter_and_short_windows():
         assert f'<option value="{value}" >{label}</option>' in page or f'<option value="{value}" selected>{label}</option>' in page, label
     assert '<option value="24" selected>24 hours</option>' in page, "24 hours by default"
     quarter = admin.get("/logs?source=ruckus-ap&hours=0.25").text
-    assert '<option value="0.25" selected>15 minutes</option>' in quarter and quarter.count(" selected>") == 3, "the chosen window is the one selected"
+    assert '<option value="0.25" selected>15 minutes</option>' in quarter and quarter.count(" selected>") == 2, "the chosen window is the one selected"
     assert '<option value="3.5" selected>3.5 hours</option>' in admin.get("/logs?source=ruckus-ap&hours=3.5").text, "any other length still works and is shown"
     assert "0.5 minutes" not in page
     short = admin.get("/logs?source=ruckus-ap&hours=0.25&view=lines").text
@@ -432,6 +456,7 @@ def main():
     test_setup_login_password()
     test_tokens_page()
     test_sources_page()
+    test_the_nav_flags_sources_that_need_a_look()
     test_naming_devices_in_the_ui_from_a_clean_start()
     test_the_page_has_an_icon()
     test_viewer_form_shows_every_filter_and_short_windows()

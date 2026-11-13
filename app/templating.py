@@ -1,3 +1,4 @@
+import hashlib
 import re
 from pathlib import Path
 
@@ -7,12 +8,21 @@ from markupsafe import Markup, escape
 
 from app.auth import current_user
 from app.config import VERSION
+from app.services import sources
 
 templates_dir = Path(__file__).parent / "templates"
+static_dir = Path(__file__).parent / "static"
 
 templates = Jinja2Templates(directory=str(templates_dir))
 templates.env.globals["current_user"] = current_user
 templates.env.globals["APP_VERSION"] = VERSION
+templates.env.globals["sources_attention"] = sources.attention
+# Cache-busting token for the static files: a content hash, so a browser picks up a changed stylesheet
+# after a deploy (APP_VERSION is "dev" on a local run, and mtimes do not survive a Docker COPY).
+_hash = hashlib.sha256()
+for _name in ("style.css", "local-time.js", "menu.js", "favicon.png", "logo.png"):
+    _hash.update((static_dir / _name).read_bytes())
+templates.env.globals["STATIC_VERSION"] = _hash.hexdigest()[:10]
 
 
 def local_time(ts) -> Markup:

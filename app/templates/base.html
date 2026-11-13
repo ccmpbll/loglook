@@ -4,31 +4,44 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}loglook{% endblock %}</title>
-  <link rel="icon" href="/static/favicon.png?v={{ APP_VERSION }}" />
-  <link rel="stylesheet" href="/static/style.css?v={{ APP_VERSION }}" />
+  <link rel="icon" href="/static/favicon.png?v={{ STATIC_VERSION }}" />
+  <link rel="stylesheet" href="/static/style.css?v={{ STATIC_VERSION }}" />
+  <noscript><style>.usermenu .menu { position: static; display: block; box-shadow: none; }</style></noscript>
 </head>
 <body>
   {% set user = current_user(request) %}
   {% if user %}
   <header class="topbar">
-    <a class="brand" href="/">loglook</a><span class="version">{{ APP_VERSION }}</span>
+    <a class="brand" href="/"><img class="mark" src="/static/logo.png?v={{ STATIC_VERSION }}" alt="" />loglook</a>
+    {% set attention = sources_attention() %}
     <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Show the menu" />
-    <label for="nav-toggle" class="menu-btn">Menu</label>
+    <label for="nav-toggle" class="menu-btn">Menu{% if attention %} <span class="navcount">{{ attention }}</span>{% endif %}</label>
     {% set path = request.url.path %}
     <nav>
-      {% for href, label in [("/logs", "Logs"), ("/sources", "Sources"), ("/tokens", "Tokens"), ("/account", "Account")] %}
-      <a href="{{ href }}"{% if path.startswith(href) %} class="active" aria-current="page"{% endif %}>{{ label }}</a>
+      {% for href, label in [("/logs", "Logs"), ("/sources", "Sources"), ("/tokens", "Tokens")] %}
+      {% set attn = href == "/sources" and attention %}
+      <a href="{{ href }}"{% if path.startswith(href) %} class="active" aria-current="page"{% endif %}{% if attn %} data-attn{% endif %}>{{ label }}{% if attn %} <span class="navcount">{{ attention }}</span>{% endif %}</a>
       {% endfor %}
     </nav>
-    <form method="post" action="/logout" class="logout-form">
-      <span class="who">{{ user.username }}</span>
-      <button type="submit">Log out</button>
-    </form>
+    <span class="spacer"></span>
+    <div class="usermenu">
+      <button type="button" class="usermenu-btn{% if path.startswith('/account') %} active{% endif %}" aria-haspopup="true" aria-expanded="false" aria-controls="user-menu">
+        <span class="avatar">{{ (user.username or "?")[:1] | upper }}</span><span class="uname">{{ user.username }}</span><span class="caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="menu" id="user-menu">
+        <a href="/account"{% if path.startswith("/account") %} aria-current="page"{% endif %}>Account</a>
+        <div class="sep"></div>
+        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+        <div class="sep"></div>
+        <div class="ver">loglook {{ APP_VERSION }}</div>
+      </div>
+    </div>
   </header>
   {% endif %}
   <main class="container">
     {% block content %}{% endblock %}
   </main>
-  <script src="/static/local-time.js?v={{ APP_VERSION }}"></script>
+  <script src="/static/local-time.js?v={{ STATIC_VERSION }}"></script>
+  <script src="/static/menu.js?v={{ STATIC_VERSION }}"></script>
 </body>
 </html>

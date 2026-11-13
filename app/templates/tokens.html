@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Tokens - loglook{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Tokens</h1></div>
+<div class="page-header"><div><h1>Tokens</h1><p class="sub">Read-only API tokens. Send one as <code>Authorization: Bearer &lt;token&gt;</code> to <code>/v1/...</code>.</p></div></div>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 {% if new_token %}
@@ -12,21 +12,21 @@
 </div>
 {% endif %}
 
-<div class="card">
-  <table class="stack">
+<div class="card flush">
+  <table class="stack tok">
     <thead><tr><th>Name</th><th>Note</th><th>Status</th><th>Expires</th><th>Last used</th><th></th></tr></thead>
     <tbody>
       {% for t in tokens %}
       <tr>
         <td data-label="Name">{{ t.name }}</td>
-        <td data-label="Note" class="muted">{{ t.note }}</td>
+        <td data-label="Note" class="full muted">{{ t.note }}</td>
         <td data-label="Status"><span class="badge {{ 'success' if t.enabled else 'cancelled' }}">{{ 'enabled' if t.enabled else 'disabled' }}</span></td>
         <td data-label="Expires">{{ t.expires_at | local_time if t.expires_at else 'never' }}</td>
         <td data-label="Last used">{{ t.last_used_at | local_time }}</td>
         <td class="actions-cell" data-label="">
           <div class="actions">
-            <form method="post" action="/tokens/{{ t.id }}/toggle"><button type="submit" class="secondary">{{ 'Disable' if t.enabled else 'Enable' }}</button></form>
-            <form method="post" action="/tokens/{{ t.id }}/delete" onsubmit="return confirm('Delete token {{ t.name }}? It stops working immediately.');"><button type="submit" class="danger">Delete</button></form>
+            <form method="post" action="/tokens/{{ t.id }}/toggle"><button type="submit" class="ghost sm">{{ 'Disable' if t.enabled else 'Enable' }}</button></form>
+            <form method="post" action="/tokens/{{ t.id }}/delete" onsubmit="return confirm('Delete token {{ t.name }}? It stops working immediately.');"><button type="submit" class="danger sm">Delete</button></form>
           </div>
         </td>
       </tr>
@@ -45,7 +45,7 @@
       <label>Note (optional)<input type="text" name="note" maxlength="200" /></label>
       <label>Expires after (days, optional)<input type="number" name="expires_days" min="1" /></label>
     </div>
-    <div class="actions form-actions"><button type="submit" class="secondary">Create token</button></div>
+    <div class="actions form-actions"><button type="submit">Create token</button></div>
   </form>
 </div>
 {% endblock %}
